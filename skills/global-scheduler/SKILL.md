@@ -7,6 +7,22 @@ description: "Use for project-scoped scheduler lifecycle, publish, migration, ro
 
 This Skill is distributable instructions for an installed `agent-task-scheduler` CLI. It stores no task data and never edits JSON state directly.
 
+## Bootstrap a new project
+
+When the user asks to install or initialize global scheduler in the current
+project, run the bundled installer from the Skill directory:
+
+```bash
+python .agents/skills/global-scheduler/scripts/install.py --project-root "$PWD"
+```
+
+Use `--project-id ID` when the directory name is not the intended stable id.
+The installer creates or reuses `.venv`, installs the bundled wheel without
+network access, creates canonical `.scheduler/project.json`, and runs
+`scheduler status`. It refuses to overwrite a different existing project
+configuration. Do not copy another project's state. After bootstrap, restart
+or reopen Codex so all windows discover the project-local Skill.
+
 ## Parlant command policy
 
 From `/home/lenovo/projects/parlant`, use one command per tool call. Standard

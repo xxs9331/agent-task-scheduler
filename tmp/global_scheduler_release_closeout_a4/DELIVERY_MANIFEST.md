@@ -12,6 +12,7 @@
 - `tests/`: core, lifecycle, history, locking, migration, project-context,
   publish, and Linux clean-install coverage
 - `docs/`, `schemas/`, and `skills/global-scheduler/README.md`
+- self-bootstrapping `skills/global-scheduler/SKILL.md`, installer, and bundled wheel
 - `pyproject.toml` and `uv.lock`
 - `tmp/`: retained historical validation and final-gate evidence
 
@@ -19,11 +20,12 @@
 
 | Command | Result |
 | --- | --- |
-| `UV_CACHE_DIR=/tmp/agent-task-scheduler-uv-cache uv run --group test pytest -q` | `43 passed in 0.61s` |
+| `UV_CACHE_DIR=/tmp/agent-task-scheduler-uv-cache uv run --group test pytest -q` | `46 passed in 0.60s` |
 | `UV_CACHE_DIR=/tmp/agent-task-scheduler-uv-cache uv run --with ruff ruff check src tests` | passed |
 | `uv lock --check` | passed; lockfile is current |
 | `uv build --wheel --out-dir /tmp/agent-task-scheduler-v1-dist` | built universal `py3-none-any` wheel |
 | wheel metadata and direct-wheel import smoke | name/version `agent-task-scheduler`/`0.1.0`; CLI `main` importable |
+| fresh-project Skill bootstrap smoke | offline wheel install, project config, and `scheduler status` passed |
 
 ## Supported-platform evidence
 
