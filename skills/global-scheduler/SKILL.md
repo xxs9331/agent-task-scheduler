@@ -1,6 +1,6 @@
 ---
 name: "global-scheduler"
-description: "Use for project-scoped scheduler lifecycle, publish, migration, routing diagnostics, release-expired recovery, or task-pool setup through the installed agent-task-scheduler CLI. In Parlant, use the standard project CLI for canonical project operations and preserve the legacy CLI only for compatibility workflows explicitly requiring --state."
+description: "Use for project-scoped scheduler lifecycle, publish, review-correction, routing diagnostics, release-expired recovery, or task-pool setup through the installed agent-task-scheduler CLI. In Parlant, the project-local CLI and .scheduler/state.json are the only supported scheduler interface."
 ---
 
 # Global Scheduler Skill (v1)
@@ -99,6 +99,7 @@ The verified command and argument contract is:
 
 | Command | Arguments |
 |---|---|
+| `init` | `--fresh [--project-id ID]` |
 | `status`, `ready`, `release-expired` | none |
 | `next` | `--worker WORKER` |
 | `describe` | `--task TASK_ID` |
@@ -106,10 +107,11 @@ The verified command and argument contract is:
 | `block`, `fail` | `--task TASK_ID --worker WORKER --reason TEXT` |
 | `complete` | `--task TASK_ID --worker WORKER [--summary TEXT]` |
 | `retry`, `resume` | `--task TASK_ID --worker WORKER --reason TEXT --last-attempt-summary TEXT --next-attempt-instruction TEXT` |
-| `publish` | `--from-file FILE [--update]` |
+| `publish` | exactly one of `--from-file FILE`, `--stdin`, or `--json JSON`; optional `--update` |
+| `review-correct` | `--task TASK_ID --reviewer WORKER --verdict pass|hold --summary TEXT` |
 | `migrate` | `[--check | --dry-run]` |
 
-`publish` requires `--from-file`; `--update` selects update mode. `migrate`
+`init --fresh` intentionally replaces the canonical configuration and empty state for an isolated project. `publish` accepts exactly one JSON input source; `--from-file` remains compatible, while `--stdin` and `--json` avoid caller-owned temporary files. `--update` selects update mode. `migrate`
 accepts at most one of `--check` and `--dry-run`. The lifecycle commands use
 the task/worker names above and emit one JSON receipt on stdout.
 
@@ -134,6 +136,12 @@ Save the strict envelope in a caller-owned file, then run:
 scheduler --project-root "$PWD" publish --from-file publish.json
 scheduler --project-root "$PWD" next
 ```
+
+For pipe-safe input, use `scheduler --project-root "$PWD" publish --stdin` or pass one JSON string with `--json`. Do not pass more than one input source.
+
+## Terminal review correction
+
+`review-correct` is append-only and accepts only terminal tasks. It leaves the task status and original summary unchanged, records the reviewer verdict and summary under `review_decisions`, and links each correction to either the terminal summary or the prior review decision. It returns a machine-readable correction receipt; it never reopens a terminal task or rewrites history.
 
 The envelope must contain `input_schema_version: 1`, matching `project_id`, an `operation` discriminator, and a non-empty `tasks` array. For `operation: "create"`, each task needs `task_id`, `agent_type`, `depends_on`, `conflict_domain`, `preferred_worker`, and object `worker_prompt`. For `operation: "update"`, each item is exactly `{ "task_id": "...", "patch": { ... } }`; `patch` is non-empty and limited to the mutable-field whitelist in the schema. Unknown fields, runtime fields (`status`, `created_at`, owner, lease, attempt), duplicate IDs, invalid dependencies, and project mismatch fail without a partial write.
 

@@ -63,6 +63,137 @@ def test_that_publish_cli_commits_a_create_envelope_to_the_resolved_project(
     )
 
 
+def test_that_init_fresh_creates_a_canonical_project_and_replaces_its_state(
+    tmp_path: Path, capsys
+) -> None:
+    scheduler = tmp_path / ".scheduler"
+    scheduler.mkdir()
+    (scheduler / "state.json").write_text('{"stale": true}', encoding="utf-8")
+
+    exit_code = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "init",
+            "--fresh",
+            "--project-id",
+            "fresh-project",
+        ]
+    )
+
+    receipt = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert receipt == {
+        "ok": True,
+        "operation": "init",
+        "changed_task_ids": [],
+        "warnings": [],
+        "project": {"project_id": "fresh-project", "root": str(tmp_path)},
+    }
+    assert json.loads((scheduler / "project.json").read_text(encoding="utf-8")) == {
+        "config_schema_version": 1,
+        "project_id": "fresh-project",
+        "state_path": ".scheduler/state.json",
+        "events_path": None,
+    }
+    assert json.loads((scheduler / "state.json").read_text(encoding="utf-8")) == {
+        "schema_version": 1,
+        "project_id": "fresh-project",
+        "tasks": {},
+        "publish_history": [],
+        "review_decisions": [],
+    }
+
+
+def test_that_publish_accepts_exactly_one_json_input_source(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    _create_project(tmp_path, events_path=None)
+    json_project = tmp_path / "json-project"
+    json_project.mkdir()
+    _create_project(json_project, events_path=None)
+    envelope = json.dumps(_create_envelope())
+    monkeypatch.setattr("sys.stdin.read", lambda: envelope)
+
+    stdin_exit = main(["--project-root", str(tmp_path), "publish", "--stdin"])
+    stdin_receipt = json.loads(capsys.readouterr().out)
+    json_exit = main(
+        ["--project-root", str(json_project), "publish", "--json", envelope]
+    )
+    json_receipt = json.loads(capsys.readouterr().out)
+
+    assert stdin_exit == json_exit == 0
+    assert stdin_receipt["changed_task_ids"] == ["task-a"]
+    assert json_receipt["changed_task_ids"] == ["task-a"]
+
+
+def test_that_review_correction_preserves_terminal_summary_and_appends_superseding_facts(
+    tmp_path: Path, capsys
+) -> None:
+    scheduler = _create_project(tmp_path, events_path=None)
+    state_path = scheduler / "state.json"
+    state = _legacy_state()
+    task = state["tasks"]["task-a"]
+    assert isinstance(task, dict)
+    task.update({"status": "done", "summary": "initial hold"})
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    first_exit = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "review-correct",
+            "--task",
+            "task-a",
+            "--reviewer",
+            "role-r",
+            "--verdict",
+            "pass",
+            "--summary",
+            "focused suite now passes",
+        ]
+    )
+    first = json.loads(capsys.readouterr().out)
+    second_exit = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "review-correct",
+            "--task",
+            "task-a",
+            "--reviewer",
+            "role-r",
+            "--verdict",
+            "hold",
+            "--summary",
+            "final smoke still pending",
+        ]
+    )
+    second = json.loads(capsys.readouterr().out)
+    persisted = json.loads(state_path.read_text(encoding="utf-8"))
+
+    assert first_exit == second_exit == 0
+    assert first["operation"] == second["operation"] == "review_correction"
+    assert persisted["tasks"]["task-a"]["summary"] == "initial hold"
+    decisions = persisted["review_decisions"]
+    assert decisions[0]["supersedes"] == {
+        "kind": "terminal_summary",
+        "summary": "initial hold",
+        "terminal_status": "done",
+    }
+    assert decisions[1]["supersedes"] == {
+        "kind": "review_decision",
+        "event_id": decisions[0]["event_id"],
+    }
+    assert second["supersedes_event_id"] == decisions[0]["event_id"]
+    state_schema = json.loads(
+        (Path(__file__).parents[2] / "schemas" / "state.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    Draft202012Validator(state_schema).validate(persisted)
+
+
 def test_that_operation_mismatch_is_reported_before_the_lock_is_created(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
@@ -194,27 +325,26 @@ def _create_project(root: Path, *, events_path: str | None) -> Path:
 
 def _write_create_envelope(root: Path) -> Path:
     envelope = root / "publish.json"
-    envelope.write_text(
-        json.dumps(
-            {
-                "input_schema_version": 1,
-                "project_id": "example",
-                "operation": "create",
-                "tasks": [
-                    {
-                        "task_id": "task-a",
-                        "agent_type": "task_executor",
-                        "depends_on": [],
-                        "conflict_domain": "core",
-                        "preferred_worker": "worker",
-                        "worker_prompt": {},
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
+    envelope.write_text(json.dumps(_create_envelope()), encoding="utf-8")
     return envelope
+
+
+def _create_envelope() -> dict[str, object]:
+    return {
+        "input_schema_version": 1,
+        "project_id": "example",
+        "operation": "create",
+        "tasks": [
+            {
+                "task_id": "task-a",
+                "agent_type": "task_executor",
+                "depends_on": [],
+                "conflict_domain": "core",
+                "preferred_worker": "worker",
+                "worker_prompt": {},
+            }
+        ],
+    }
 
 
 def _legacy_state() -> dict[str, object]:

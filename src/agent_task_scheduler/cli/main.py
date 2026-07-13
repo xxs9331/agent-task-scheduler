@@ -5,10 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import sys
 import tempfile
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Sequence
+from uuid import uuid4
 
 from agent_task_scheduler.core.scheduler import SchedulerCore
 from agent_task_scheduler.events import append_observation_event
@@ -26,6 +30,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "init":
+            return _emit(_init(args))
         context = discover_project_context(
             current_directory=Path.cwd(), project_root=args.project_root
         )
@@ -49,8 +55,14 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scheduler")
     parser.add_argument("--project-root", type=Path)
     commands = parser.add_subparsers(dest="command", required=True)
+    init = commands.add_parser("init")
+    init.add_argument("--fresh", action="store_true", required=True)
+    init.add_argument("--project-id")
     publish = commands.add_parser("publish")
-    publish.add_argument("--from-file", required=True, type=Path)
+    input_source = publish.add_mutually_exclusive_group(required=True)
+    input_source.add_argument("--from-file", type=Path)
+    input_source.add_argument("--stdin", action="store_true")
+    input_source.add_argument("--json")
     publish.add_argument("--update", action="store_true")
     migrate = commands.add_parser("migrate")
     mode = migrate.add_mutually_exclusive_group()
@@ -63,6 +75,11 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--worker", required=True)
     command = commands.add_parser("describe")
     command.add_argument("--task", required=True)
+    review_correction = commands.add_parser("review-correct")
+    review_correction.add_argument("--task", required=True)
+    review_correction.add_argument("--reviewer", required=True)
+    review_correction.add_argument("--verdict", choices=("pass", "hold"), required=True)
+    review_correction.add_argument("--summary", required=True)
     for name in (
         "claim",
         "heartbeat",
@@ -88,7 +105,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _dispatch(args: argparse.Namespace, context: ProjectContext) -> dict[str, object]:
     if args.command == "publish":
-        envelope = json.loads(args.from_file.read_text(encoding="utf-8"))
+        envelope = _read_publish_envelope(args)
         mismatch = _operation_mismatch(envelope, update=args.update)
         if mismatch is not None:
             return mismatch
@@ -100,7 +117,101 @@ def _dispatch(args: argparse.Namespace, context: ProjectContext) -> dict[str, ob
             dry_run=args.check or args.dry_run,
         )
         return _normalize_migration_receipt(receipt)
+    if args.command == "review-correct":
+        return _review_correct(context, args)
     return _lifecycle(args, context)
+
+
+def _init(args: argparse.Namespace) -> dict[str, object]:
+    root = (args.project_root or Path.cwd()).resolve()
+    project_id = _normalized_project_id(args.project_id or root.name)
+    scheduler_directory = root / ".scheduler"
+    scheduler_directory.mkdir(parents=True, exist_ok=True)
+    config = {
+        "config_schema_version": 1,
+        "project_id": project_id,
+        "state_path": ".scheduler/state.json",
+        "events_path": None,
+    }
+    _atomic_write_json(scheduler_directory / "project.json", config)
+    _atomic_write_json(
+        scheduler_directory / "state.json",
+        {
+            "schema_version": 1,
+            "project_id": project_id,
+            "tasks": {},
+            "publish_history": [],
+            "review_decisions": [],
+        },
+    )
+    return {
+        "ok": True,
+        "operation": "init",
+        "changed_task_ids": [],
+        "warnings": [],
+        "project": {"project_id": project_id, "root": str(root)},
+    }
+
+
+def _read_publish_envelope(args: argparse.Namespace) -> object:
+    if args.from_file is not None:
+        return json.loads(args.from_file.read_text(encoding="utf-8"))
+    if args.stdin:
+        return json.loads(sys.stdin.read())
+    return json.loads(args.json)
+
+
+def _review_correct(context: ProjectContext, args: argparse.Namespace) -> dict[str, object]:
+    with StateLock(context.lock_path):
+        state = _load_state(context.state_path, context.project_id)
+        tasks = state.get("tasks")
+        task = tasks.get(args.task) if isinstance(tasks, dict) else None
+        if not isinstance(task, dict):
+            return _failure("TASK_NOT_FOUND", "task was not found")
+        terminal_status = task.get("status")
+        if terminal_status not in {"done", "blocked", "failed"}:
+            return _failure("TASK_NOT_TERMINAL", "review correction requires a terminal task")
+        decisions = state.setdefault("review_decisions", [])
+        if not isinstance(decisions, list):
+            raise ValueError("review_decisions must be a list")
+        prior = next(
+            (
+                decision
+                for decision in reversed(decisions)
+                if isinstance(decision, dict) and decision.get("task_id") == args.task
+            ),
+            None,
+        )
+        supersedes = (
+            {"kind": "review_decision", "event_id": prior["event_id"]}
+            if isinstance(prior, dict)
+            else {
+                "kind": "terminal_summary",
+                "summary": task.get("summary"),
+                "terminal_status": terminal_status,
+            }
+        )
+        event_id = str(uuid4())
+        decisions.append(
+            {
+                "event_id": event_id,
+                "event_type": "review_correction",
+                "occurred_at": datetime.now(tz=UTC).isoformat(),
+                "task_id": args.task,
+                "reviewer": args.reviewer,
+                "verdict": args.verdict,
+                "summary": args.summary,
+                "supersedes": supersedes,
+            }
+        )
+        _atomic_write(context.state_path, state)
+    return {
+        "ok": True,
+        "operation": "review_correction",
+        "task_id": args.task,
+        "review_decision_id": event_id,
+        "supersedes_event_id": supersedes.get("event_id"),
+    }
 
 
 def _publish(
@@ -211,10 +322,15 @@ def _load_state(path: Path, project_id: str) -> dict[str, object]:
     loaded = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(loaded, dict):
         raise ValueError("state must be an object")
+    loaded.setdefault("publish_history", [])
     return loaded
 
 
 def _atomic_write(path: Path, state: dict[str, object]) -> None:
+    _atomic_write_json(path, state)
+
+
+def _atomic_write_json(path: Path, value: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", dir=path.parent
@@ -222,7 +338,7 @@ def _atomic_write(path: Path, state: dict[str, object]) -> None:
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-            json.dump(state, output, ensure_ascii=False, sort_keys=True)
+            json.dump(value, output, ensure_ascii=False, sort_keys=True)
             output.write("\n")
             output.flush()
             os.fsync(output.fileno())
@@ -234,6 +350,13 @@ def _atomic_write(path: Path, state: dict[str, object]) -> None:
 
 def _failure(code: str, message: str) -> dict[str, object]:
     return {"ok": False, "error": {"code": code, "message": message}}
+
+
+def _normalized_project_id(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-.")
+    if not normalized:
+        raise ValueError("project_id is empty after normalization")
+    return normalized
 
 
 def _emit(receipt: dict[str, object]) -> int:
