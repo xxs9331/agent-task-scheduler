@@ -22,6 +22,14 @@ Load detailed references only when the task needs them:
 - `references/platform.md`: Linux/Windows and filesystem boundaries.
 - `references/migration.md`: dependencies, history, and legacy migration safety.
 
+## Completion evidence policy
+
+Routine implementation and documentation tasks should finish with a concise
+`complete --summary`; do not require or create `REPORT.md` by default. The
+summary should name the result, verification, touched files, caveats, and next
+recommendation. Use a durable report or decision artifact only for research,
+R gates, complex audits, or an explicitly requested multi-artifact handoff.
+
 For scheduler task planning, start from `assets/任务计划书模板.md`. Preserve its
 research, flowchart, execution-batch, gate, and final-acceptance structure.
 Merge consecutive work owned by the same role when it has the same file domain
