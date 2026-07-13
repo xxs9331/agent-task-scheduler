@@ -1,8 +1,9 @@
 # agent-task-scheduler v1 delivery manifest
 
-- Local release ref: `scheduler-v1.0.0` (created locally; no remote push)
+- Local release ref: `scheduler-v0.1.0` (created locally; no remote push)
 - Package version: `0.1.0`
-- Wheel: `/tmp/agent-task-scheduler-v1-dist/agent_task_scheduler-0.1.0-py3-none-any.whl`
+- Retained wheel: `artifacts/v0.1.0/agent_task_scheduler-0.1.0-py3-none-any.whl`
+- Original build output: `/tmp/agent-task-scheduler-v1-dist/agent_task_scheduler-0.1.0-py3-none-any.whl`
 - Wheel SHA-256: `6ef426ffe95a98a14d70a75c50681a1980cfa8d0fec8dad83b8102396532ff2a`
 
 ## Included deliverables
@@ -37,3 +38,5 @@
   guarantee.
 - Public writes use the CLI; MCP and Task Center integration are out of scope.
 - The release is local only: no remote push or package publication occurred.
+- `artifacts/` is intentionally Git-ignored; verify the retained wheel against
+  the SHA-256 above or rebuild it from `scheduler-v0.1.0`.

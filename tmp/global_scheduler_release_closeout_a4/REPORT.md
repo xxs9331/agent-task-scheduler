@@ -1,7 +1,7 @@
 # Global scheduler v1 A4 release closeout
 
 - task_id: `task_global_scheduler_release_closeout_a4`
-- status: complete pending scheduler receipt
+- status: complete
 
 ## R5 evidence reused
 
@@ -25,11 +25,12 @@ All required release checks passed. The wheel is
 `/tmp/agent-task-scheduler-v1-dist/agent_task_scheduler-0.1.0-py3-none-any.whl`
 with SHA-256
 `6ef426ffe95a98a14d70a75c50681a1980cfa8d0fec8dad83b8102396532ff2a`.
-The full command/results inventory and v1 boundaries are in
-`DELIVERY_MANIFEST.md`.
+The same verified wheel is retained at
+`artifacts/v0.1.0/agent_task_scheduler-0.1.0-py3-none-any.whl`; the full
+command/results inventory and v1 boundaries are in `DELIVERY_MANIFEST.md`.
 
 ## Boundaries
 
 No Parlant runtime/business logic, Task Center, datasets, CNB, Feishu, remote
-repository, or package registry was changed. The release ref and Git commit are
-local only.
+repository, or package registry was changed. The corrected release ref
+`scheduler-v0.1.0`, Git commit, and retained artifact are local only.

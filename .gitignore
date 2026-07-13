@@ -10,5 +10,6 @@ __pycache__/
 # Build outputs and local test timing artifacts
 build/
 dist/
+artifacts/
 *.egg-info/
 test_timing.csv
