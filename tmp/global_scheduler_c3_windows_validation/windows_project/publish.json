@@ -1,0 +1,1 @@
+{"input_schema_version":1,"project_id":"windows-wheel-c3","operation":"create","tasks":[{"task_id":"windows-wheel-task","agent_type":"task_executor","depends_on":[],"conflict_domain":"windows-wheel-c3","preferred_worker":"window_c","worker_prompt":{}}]}

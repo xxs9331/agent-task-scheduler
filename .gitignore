@@ -1,0 +1,14 @@
+# Python virtual environments and interpreter caches
+.venv/
+__pycache__/
+*.py[cod]
+
+# Test and lint caches
+.pytest_cache/
+.ruff_cache/
+
+# Build outputs and local test timing artifacts
+build/
+dist/
+*.egg-info/
+test_timing.csv

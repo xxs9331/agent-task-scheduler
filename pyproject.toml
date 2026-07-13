@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-task-scheduler"
+version = "0.1.0"
+description = "Project-scoped task scheduler core"
+requires-python = ">=3.11"
+
+[dependency-groups]
+test = [
+  "jsonschema>=4.23.0",
+  "pytest>=8.3.0",
+]
+
+[project.scripts]
+scheduler = "agent_task_scheduler.cli.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_task_scheduler"]
+
+[tool.ruff]
+target-version = "py311"

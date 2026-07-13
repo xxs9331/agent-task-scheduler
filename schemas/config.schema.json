@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scheduler/config.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["config_schema_version", "project_id", "state_path"],
+  "properties": {
+    "config_schema_version": {"type": "integer", "const": 1},
+    "project_id": {"type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9._-]+$"},
+    "state_path": {"type": "string", "minLength": 1},
+    "events_path": {"type": ["string", "null"], "minLength": 1}
+  }
+}

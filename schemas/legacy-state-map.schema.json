@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scheduler/legacy-state-map.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_format", "source_schema_version", "target_schema_version", "root_mapping", "task_mapping", "validation_order"],
+  "properties": {
+    "source_format": {"const": "parlant_legacy"},
+    "source_schema_version": {"type": "integer"},
+    "target_schema_version": {"const": 1},
+    "root_mapping": {"type": "object", "additionalProperties": {"type": "string"}},
+    "task_mapping": {"type": "object", "additionalProperties": {"type": "string"}},
+    "validation_order": {"type": "array", "minItems": 7, "items": {"type": "string"}}
+  }
+}

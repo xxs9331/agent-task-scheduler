@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scheduler/receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "operation", "project", "changed_task_ids", "warnings"],
+  "properties": {
+    "ok": {"const": true},
+    "operation": {"enum": ["publish", "publish_update", "migrate"]},
+    "project": {"type": "object", "required": ["project_id", "root"], "properties": {"project_id": {"type": "string"}, "root": {"type": "string"}}, "additionalProperties": false},
+    "changed_task_ids": {"type": "array", "items": {"type": "string"}},
+    "warnings": {"type": "array", "items": {"$ref": "#/$defs/warning"}},
+    "migration": {"type": "object"}
+  },
+  "$defs": {
+    "warning": {"type": "object", "additionalProperties": false, "required": ["code", "message", "rebuild_from"], "properties": {"code": {"const": "OBSERVATION_LOG_WARNING"}, "message": {"type": "string"}, "rebuild_from": {"const": "publish_history"}}}
+  }
+}

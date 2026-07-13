@@ -1,0 +1,20 @@
+{
+  "task_id": "task_global_scheduler_research_gates_r",
+  "role": "R",
+  "decision": "pass",
+  "scope": "global_scheduler_v1_integration",
+  "passed_gates": [
+    "project_scoped_create_publish_smoke",
+    "operation_mismatch_no_write_smoke",
+    "source_compileall",
+    "lifecycle_and_migration_commands_exposed",
+    "post_commit_observation_warning_wired",
+    "continue_cli_route_and_persistence",
+    "publish_and_migration_receipt_schema_conformance",
+    "full_pytest_42_passed"
+  ],
+  "blocking_gates": [],
+  "next_owner": null,
+  "required_artifacts": [],
+  "follow_up": "Declare jsonschema as a development/test dependency for reproducible schema-validation test collection."
+}
