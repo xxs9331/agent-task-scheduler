@@ -130,14 +130,13 @@ stable `error.code`/`error.message` envelope.
 
 ## Publish
 
-Save the strict envelope in a caller-owned file, then run:
+Do not create a temporary publish file or branch on package size. For every agent-published task batch, start one scheduler process and write the strict JSON envelope directly to standard input:
 
 ```bash
-scheduler --project-root "$PWD" publish --from-file publish.json
-scheduler --project-root "$PWD" next
+scheduler --project-root "$PWD" publish --stdin
 ```
 
-For pipe-safe input, use `scheduler --project-root "$PWD" publish --stdin` or pass one JSON string with `--json`. Do not pass more than one input source.
+Use `--update` with the same stdin mode for eligible updates. The CLI may retain `--json` as a public human convenience, but project agents do not use it as a separate workflow branch. Use `--from-file` only when the user explicitly requires a durable, auditable input package. Do not pass more than one input source, do not use a shell pipe when the environment can write directly to the process stdin, and verify routing afterward with a separate `next --worker <id>` command.
 
 ## Terminal review correction
 
