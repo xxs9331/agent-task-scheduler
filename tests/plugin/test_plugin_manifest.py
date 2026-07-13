@@ -48,8 +48,17 @@ def test_that_plugin_policy_and_progressive_references_exist() -> None:
         "skills/global-scheduler/references/errors.md",
         "skills/global-scheduler/references/platform.md",
         "skills/global-scheduler/references/migration.md",
+        "skills/global-scheduler/assets/任务计划书模板.md",
     ):
         assert (ROOT / path).is_file(), path
+
+
+def test_that_readmes_explain_the_skill_and_link_the_task_plan_template() -> None:
+    for readme_name in ("README.md", "README_EN.md"):
+        readme = (ROOT / readme_name).read_text()
+
+        assert "global-scheduler" in readme
+        assert "skills/global-scheduler/assets/任务计划书模板.md" in readme
 
 
 def test_that_skill_eval_cases_include_positive_and_negative_triggers() -> None:

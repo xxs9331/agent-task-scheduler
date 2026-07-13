@@ -22,6 +22,12 @@ Load detailed references only when the task needs them:
 - `references/platform.md`: Linux/Windows and filesystem boundaries.
 - `references/migration.md`: dependencies, history, and legacy migration safety.
 
+For scheduler task planning, start from `assets/任务计划书模板.md`. Preserve its
+research, flowchart, execution-batch, gate, and final-acceptance structure.
+Merge consecutive work owned by the same role when it has the same file domain
+and no intervening gate, platform boundary, or external wait. Gates are batch
+completion conditions, not standalone execution batches.
+
 ## Bootstrap a new project
 
 When the user asks to install or initialize global scheduler in the current

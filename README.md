@@ -13,6 +13,28 @@ Skill 和 Python CLI，并将每个项目的配置、状态、锁、发布历史
 - 诊断路由、过期 lease、迁移和兼容性问题。
 - 隔离不同项目的状态、历史记录和锁。
 
+## Skill 是什么
+
+`global-scheduler` Skill 是 Codex 使用调度器时的可复用操作手册。它不保存任务数据，
+也不代替 Scheduler CLI；它负责让 Codex 在正确的项目边界内调用 CLI，并遵守初始化、
+发布、领取、续租、完成、故障恢复和迁移检查等契约。
+
+以下请求会触发或适合使用这个 Skill：
+
+- “使用 global-scheduler 初始化当前项目。”
+- “发布这一批 A/B/C/D/R 任务，并检查依赖和并行关系。”
+- “检查为什么任务无法 claim，是否存在有效 lease。”
+- “执行 release-expired，恢复已关闭窗口遗留的任务。”
+- “先 dry-run 检查旧任务池是否可以迁移。”
+
+典型流程是：Codex 读取 Skill → 定位当前项目配置 → 调用项目内的 `scheduler` CLI →
+根据 JSON receipt 判断成功、重试或停止。Skill 明确禁止跨项目复用状态、直接编辑状态
+JSON、静默迁移 legacy 数据，以及在等待 gate 时长期占用任务 lease。
+
+复杂任务拆分可以从随插件安装的
+[《任务计划书模板》](skills/global-scheduler/assets/任务计划书模板.md)开始。模板包含调研、
+批次、并行节点、R gate、任务合并和最终验收结构；gate 不单独算作执行批次。
+
 ## 从 Codex 自定义市场安装
 
 ```bash
@@ -49,6 +71,7 @@ cp -R /path/to/agent-task-scheduler/skills/global-scheduler .agents/skills/
 - `skills/global-scheduler/SKILL.md`：触发规则与操作流程。
 - `skills/global-scheduler/scripts/install.py`：离线项目初始化程序。
 - `skills/global-scheduler/assets/`：经过验证的内置 wheel。
+- `skills/global-scheduler/assets/任务计划书模板.md`：可直接复用的中文任务计划模板。
 - `skills/global-scheduler/references/`：契约、错误、迁移和平台边界。
 - `tests/`、`evals/`：实现测试、插件基础设施测试和触发用例。
 

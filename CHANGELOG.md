@@ -4,6 +4,7 @@
 
 - Added Chinese-first bilingual installation and usage documentation.
 - Added a Codex custom marketplace catalog and verified repository metadata.
+- Documented the Skill workflow and bundled the reusable Chinese task-plan template.
 
 ## 0.1.0 - 2026-07-13
 

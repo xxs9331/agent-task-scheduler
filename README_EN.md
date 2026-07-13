@@ -13,6 +13,27 @@ history, and optional observation logs isolated inside each project.
 - Diagnose routing, expired leases, migration, and compatibility issues.
 - Isolate scheduler state, history, and locks between projects.
 
+## What the Skill does
+
+The `global-scheduler` Skill is the reusable operating guide Codex follows when
+using the scheduler. It stores no task data and does not replace the Scheduler
+CLI. Instead, it makes Codex invoke the CLI within the correct project boundary
+and follow the contracts for bootstrap, publish, claim, heartbeat, completion,
+recovery, and guarded migration.
+
+Typical requests include initializing a project, publishing parallel A/B/C/D/R
+work, diagnosing a rejected claim or active lease, releasing expired work, and
+dry-running a legacy migration. The normal flow is: load the Skill, discover the
+project configuration, invoke the project-local `scheduler` CLI, and act on its
+JSON receipt.
+
+The Skill prohibits cross-project state reuse, direct state-JSON edits, silent
+legacy migration, and holding a task lease while waiting for a gate. For complex
+work breakdowns, start with the bundled Chinese
+[task-plan template](skills/global-scheduler/assets/任务计划书模板.md), which covers
+research, execution batches, parallel nodes, R gates, task merging, and final
+acceptance.
+
 ## Install from a custom Codex marketplace
 
 ```bash
@@ -47,6 +68,7 @@ cp -R /path/to/agent-task-scheduler/skills/global-scheduler .agents/skills/
 - `skills/global-scheduler/SKILL.md`: trigger rules and operational workflow.
 - `skills/global-scheduler/scripts/install.py`: offline project bootstrap.
 - `skills/global-scheduler/assets/`: bundled, verified wheel.
+- `skills/global-scheduler/assets/任务计划书模板.md`: reusable Chinese task-plan template.
 - `skills/global-scheduler/references/`: contracts, errors, migration, and platform boundaries.
 - `tests/` and `evals/`: implementation, infrastructure, and trigger cases.
 
