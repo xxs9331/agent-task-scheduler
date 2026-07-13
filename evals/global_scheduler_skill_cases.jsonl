@@ -1,0 +1,5 @@
+{"prompt":"Initialize global scheduler in this new project.","should_trigger":true,"expected":"Run the bundled offline bootstrap after checking existing config."}
+{"prompt":"Publish these scheduler tasks and show the next task for window_a.","should_trigger":true,"expected":"Validate a strict envelope, publish, then run next with a worker."}
+{"prompt":"Why is this scheduler task blocked by a lease?","should_trigger":true,"expected":"Inspect structured lifecycle state and use guarded recovery guidance."}
+{"prompt":"Rewrite this paragraph in Chinese.","should_trigger":false,"expected":"Do not activate global-scheduler."}
+{"prompt":"What is the weather tomorrow?","should_trigger":false,"expected":"Do not activate global-scheduler."}

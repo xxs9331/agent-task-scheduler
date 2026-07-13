@@ -13,6 +13,7 @@
   publish, and Linux clean-install coverage
 - `docs/`, `schemas/`, and `skills/global-scheduler/README.md`
 - self-bootstrapping `skills/global-scheduler/SKILL.md`, installer, and bundled wheel
+- `.codex-plugin/plugin.json`, root release/policy documents, progressive Skill references, and trigger eval cases
 - `pyproject.toml` and `uv.lock`
 - `tmp/`: retained historical validation and final-gate evidence
 
@@ -20,12 +21,13 @@
 
 | Command | Result |
 | --- | --- |
-| `UV_CACHE_DIR=/tmp/agent-task-scheduler-uv-cache uv run --group test pytest -q` | `46 passed in 0.60s` |
+| `UV_CACHE_DIR=/tmp/agent-task-scheduler-uv-cache uv run --group test pytest -q` | `50 passed in 0.63s` |
 | `UV_CACHE_DIR=/tmp/agent-task-scheduler-uv-cache uv run --with ruff ruff check src tests` | passed |
 | `uv lock --check` | passed; lockfile is current |
 | `uv build --wheel --out-dir /tmp/agent-task-scheduler-v1-dist` | built universal `py3-none-any` wheel |
 | wheel metadata and direct-wheel import smoke | name/version `agent-task-scheduler`/`0.1.0`; CLI `main` importable |
 | fresh-project Skill bootstrap smoke | offline wheel install, project config, and `scheduler status` passed |
+| plugin infrastructure and eval parsing | manifest paths, Skill frontmatter, policies/references, and 5 trigger cases passed |
 
 ## Supported-platform evidence
 
@@ -40,5 +42,6 @@
   guarantee.
 - Public writes use the CLI; MCP and Task Center integration are out of scope.
 - The release is local only: no remote push or package publication occurred.
+- Marketplace submission still requires real repository/publisher metadata and store artwork or policy URLs where mandated.
 - `artifacts/` is intentionally Git-ignored; verify the retained wheel against
   the SHA-256 above or rebuild it from `scheduler-v0.1.0`.

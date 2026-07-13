@@ -7,6 +7,21 @@ description: "Use for project-scoped scheduler lifecycle, publish, migration, ro
 
 This Skill is distributable instructions for an installed `agent-task-scheduler` CLI. It stores no task data and never edits JSON state directly.
 
+## Goal and non-goals
+
+Use this Skill to initialize an isolated project scheduler, publish validated
+tasks, operate lifecycle transitions, diagnose routing and leases, and perform
+guarded migration checks. Do not use it to generate task content, change staff
+routing policy, modify Task Center, promise network-filesystem locking, or
+silently migrate legacy project metadata.
+
+Load detailed references only when the task needs them:
+
+- `references/contract.md`: schemas, lifecycle, publish, and receipt contract.
+- `references/errors.md`: stable failures and recovery decisions.
+- `references/platform.md`: Linux/Windows and filesystem boundaries.
+- `references/migration.md`: dependencies, history, and legacy migration safety.
+
 ## Bootstrap a new project
 
 When the user asks to install or initialize global scheduler in the current
@@ -150,3 +165,12 @@ Do not rely on an ad-hoc `uv run --with jsonschema` override.
 ## Safety boundary
 
 Do not use this Skill to modify Task Center UI/API, runtime/business logic, datasets, external systems, MCP integrations, network-filesystem locking, or historical publish scripts. Do not declare a gate pass; only the read-only research role may issue gate decisions.
+
+## Acceptance
+
+- Bootstrap exits successfully and emits a final JSON object with `ok: true`.
+- `.scheduler/project.json` contains the intended unique project id.
+- The project venv runs `scheduler status` with matching project context.
+- Publish/lifecycle operations return stable JSON and do not cross project roots.
+- Failures preserve state bytes unless the documented operation committed
+  successfully and returned a warning.

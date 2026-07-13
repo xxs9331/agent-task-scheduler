@@ -21,8 +21,8 @@ or legacy task record was removed.
 
 ## Verification and delivery
 
-All required release checks passed. The final suite contains 46 passing tests,
-including three bootstrap-installer tests. The wheel is
+All required release checks passed. The final suite contains 50 passing tests,
+including bootstrap-installer and plugin-infrastructure tests. The wheel is
 `/tmp/agent-task-scheduler-v1-dist/agent_task_scheduler-0.1.0-py3-none-any.whl`
 with SHA-256
 `6ef426ffe95a98a14d70a75c50681a1980cfa8d0fec8dad83b8102396532ff2a`.
@@ -31,6 +31,8 @@ The same verified wheel is retained at
 command/results inventory and v1 boundaries are in `DELIVERY_MANIFEST.md`.
 The distributable Skill now bundles the same wheel plus a tested installer that
 can initialize a fresh project without network access.
+The repository also contains a Codex plugin manifest, progressive references,
+trigger eval cases, license, changelog, and security/privacy boundaries.
 
 ## Boundaries
 

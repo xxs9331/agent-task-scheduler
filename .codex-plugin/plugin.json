@@ -1,0 +1,36 @@
+{
+  "name": "global-scheduler",
+  "version": "0.1.0",
+  "description": "Project-scoped task scheduler workflows, offline bootstrap, lifecycle operations, publish, migration diagnostics, and recovery guidance.",
+  "author": {
+    "name": "WorldTree scheduler maintainers"
+  },
+  "license": "MIT",
+  "keywords": [
+    "scheduler",
+    "multi-agent",
+    "task-lifecycle",
+    "project-isolation",
+    "codex-skill"
+  ],
+  "skills": "./skills/",
+  "hooks": {},
+  "interface": {
+    "displayName": "Global Scheduler",
+    "shortDescription": "Initialize and operate isolated project task schedulers",
+    "longDescription": "Bootstrap a project-local scheduler without network access, publish and route tasks, manage lifecycle transitions, diagnose blocked work, and perform guarded migration checks.",
+    "developerName": "WorldTree scheduler maintainers",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Initialize global scheduler in this project.",
+      "Publish and route this project's scheduler tasks."
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}
