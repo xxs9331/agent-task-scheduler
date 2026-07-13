@@ -1,0 +1,23 @@
+{
+  "name": "xxs9331-scheduler",
+  "interface": {
+    "displayName": "XXS9331 Scheduler Plugins"
+  },
+  "plugins": [
+    {
+      "name": "global-scheduler",
+      "source": {
+        "source": "local",
+        "path": "."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL",
+        "products": [
+          "CODEX"
+        ]
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

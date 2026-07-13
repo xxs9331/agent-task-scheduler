@@ -1,45 +1,105 @@
 # Global Scheduler
 
-Global Scheduler is a Codex plugin containing a self-bootstrapping Skill and a
-project-scoped Python scheduler CLI. It keeps each project's configuration,
-state, lock, publish history, and optional observation log inside that project.
+Global Scheduler 是一个面向 Codex 的项目级任务调度插件。它包含可自动引导安装的
+Skill 和 Python CLI，并将每个项目的配置、状态、锁、发布历史及可选观测日志保存在
+项目内部，避免不同项目互相污染。
 
-## Contents
+## 功能
 
-- `.codex-plugin/plugin.json`: plugin discovery and marketplace metadata.
-- `skills/global-scheduler/SKILL.md`: trigger rules and operational workflow.
-- `skills/global-scheduler/scripts/install.py`: offline project bootstrap.
-- `skills/global-scheduler/assets/`: bundled, verified wheel.
-- `skills/global-scheduler/references/`: contract, errors, migration, and platform boundaries.
-- `tests/` and `evals/`: implementation, plugin-infrastructure, and trigger cases.
+- 初始化项目级调度器，无需在线下载 Python 包。
+- 发布、领取、续租、继续和完成任务。
+- 诊断路由、过期 lease、迁移和兼容性问题。
+- 隔离不同项目的状态、历史记录和锁。
 
-## Local Skill installation
+## 从 Codex 自定义市场安装
 
-Until this repository is registered in a Codex plugin marketplace, copy the
-whole Skill directory into a project:
+本仓库可以作为 Codex 自定义市场直接添加：
+
+```bash
+codex plugin marketplace add xxs9331/agent-task-scheduler --ref main
+codex plugin add global-scheduler@xxs9331-scheduler
+```
+
+重启 Codex 后，在目标项目中输入：
+
+```text
+使用 global-scheduler 初始化当前项目。
+```
+
+Skill 会安装仓库内置的 wheel、创建项目配置并执行 smoke check。只有运行 Codex 的
+用户需要安装插件；A/B/C/D/R 等执行角色在同一项目和 Codex 环境中使用它，无需各自
+重复安装。
+
+> 当前支持从本仓库这个“自定义市场”安装，但尚未收录到 OpenAI 默认 Codex 市场，
+> 因此暂时不能只在默认市场中搜索名称完成安装。
+
+## 本地安装
+
+也可以将整个 Skill 目录复制到目标项目：
 
 ```bash
 mkdir -p .agents/skills
 cp -R /path/to/agent-task-scheduler/skills/global-scheduler .agents/skills/
 ```
 
-Restart Codex, then ask: `Use global-scheduler to initialize this project.`
-The Skill installs its bundled wheel, creates canonical project configuration,
-and runs a smoke check without network access.
+## 仓库内容
 
-## Marketplace readiness
+- `.agents/plugins/marketplace.json`：Codex 自定义市场清单。
+- `.codex-plugin/plugin.json`：插件发现及展示元数据。
+- `skills/global-scheduler/SKILL.md`：触发规则与操作流程。
+- `skills/global-scheduler/scripts/install.py`：离线项目初始化程序。
+- `skills/global-scheduler/assets/`：经过验证的内置 wheel。
+- `skills/global-scheduler/references/`：契约、错误、迁移和平台边界。
+- `tests/`、`evals/`：实现测试、插件基础设施测试和触发用例。
 
-The plugin manifest points to `./skills/`, matching Codex plugin layout. A
-marketplace submission still needs an actual repository/homepage, publisher
-identity, and any required store artwork or policy URLs; these are intentionally
-not fabricated in this local release.
-
-## Validation
+## 验证
 
 ```bash
 uv run --group test pytest -q
 uv run --with ruff ruff check src tests skills/global-scheduler/scripts/install.py
 ```
 
-See `SECURITY.md`, `PRIVACY.md`, and `CHANGELOG.md` for boundaries and release
-history.
+安全、隐私和版本记录见 `SECURITY.md`、`PRIVACY.md` 和 `CHANGELOG.md`。
+
+---
+
+## English
+
+Global Scheduler is a project-scoped Codex plugin containing a self-bootstrapping
+Skill and a Python scheduler CLI. It keeps configuration, state, locks, publish
+history, and optional observation logs isolated inside each project.
+
+### Install from a custom Codex marketplace
+
+```bash
+codex plugin marketplace add xxs9331/agent-task-scheduler --ref main
+codex plugin add global-scheduler@xxs9331-scheduler
+```
+
+Restart Codex, open the target project, and ask:
+
+```text
+Use global-scheduler to initialize this project.
+```
+
+The Skill installs its bundled wheel, creates canonical project configuration,
+and runs a smoke check without downloading the Python package. This repository
+is directly installable as a custom marketplace, but it is not yet listed in
+OpenAI's default Codex marketplace.
+
+### Local Skill installation
+
+```bash
+mkdir -p .agents/skills
+cp -R /path/to/agent-task-scheduler/skills/global-scheduler .agents/skills/
+```
+
+### Validation
+
+```bash
+uv run --group test pytest -q
+uv run --with ruff ruff check src tests skills/global-scheduler/scripts/install.py
+```
+
+See `SECURITY.md`, `PRIVACY.md`, and `CHANGELOG.md` for operational boundaries
+and release history.

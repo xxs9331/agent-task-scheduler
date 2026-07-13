@@ -15,6 +15,19 @@ def test_that_plugin_manifest_points_to_discoverable_skills() -> None:
     assert manifest["skills"] == "./skills/"
     assert (ROOT / manifest["skills"] / "global-scheduler" / "SKILL.md").is_file()
     assert manifest["interface"]["capabilities"] == ["Interactive", "Read", "Write"]
+    assert manifest["repository"] == "https://github.com/xxs9331/agent-task-scheduler"
+
+
+def test_that_marketplace_catalog_resolves_the_root_plugin() -> None:
+    catalog = json.loads(
+        (ROOT / ".agents" / "plugins" / "marketplace.json").read_text()
+    )
+
+    assert catalog["name"] == "xxs9331-scheduler"
+    plugin = catalog["plugins"][0]
+    assert plugin["name"] == "global-scheduler"
+    assert plugin["source"] == {"source": "local", "path": "."}
+    assert (ROOT / plugin["source"]["path"] / ".codex-plugin" / "plugin.json").is_file()
 
 
 def test_that_skill_frontmatter_declares_name_and_trigger_description() -> None:

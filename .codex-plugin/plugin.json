@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "description": "Project-scoped task scheduler workflows, offline bootstrap, lifecycle operations, publish, migration diagnostics, and recovery guidance.",
   "author": {
-    "name": "WorldTree scheduler maintainers"
+    "name": "xxs9331"
   },
+  "homepage": "https://github.com/xxs9331/agent-task-scheduler",
+  "repository": "https://github.com/xxs9331/agent-task-scheduler",
   "license": "MIT",
   "keywords": [
     "scheduler",
@@ -19,7 +21,9 @@
     "displayName": "Global Scheduler",
     "shortDescription": "Initialize and operate isolated project task schedulers",
     "longDescription": "Bootstrap a project-local scheduler without network access, publish and route tasks, manage lifecycle transitions, diagnose blocked work, and perform guarded migration checks.",
-    "developerName": "WorldTree scheduler maintainers",
+    "developerName": "xxs9331",
+    "websiteURL": "https://github.com/xxs9331/agent-task-scheduler",
+    "privacyPolicyURL": "https://github.com/xxs9331/agent-task-scheduler/blob/main/PRIVACY.md",
     "category": "Developer Tools",
     "capabilities": [
       "Interactive",

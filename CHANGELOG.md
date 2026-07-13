@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added Chinese-first bilingual installation and usage documentation.
+- Added a Codex custom marketplace catalog and verified repository metadata.
+
 ## 0.1.0 - 2026-07-13
 
 - Added project-scoped scheduler core and CLI.
