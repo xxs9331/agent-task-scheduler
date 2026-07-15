@@ -46,6 +46,7 @@ def test_that_plugin_policy_and_progressive_references_exist() -> None:
         "PRIVACY.md",
         "skills/global-scheduler/references/contract.md",
         "skills/global-scheduler/references/errors.md",
+        "skills/global-scheduler/references/bootstrap.md",
         "skills/global-scheduler/references/platform.md",
         "skills/global-scheduler/references/migration.md",
         "skills/global-scheduler/assets/任务计划书模板.md",

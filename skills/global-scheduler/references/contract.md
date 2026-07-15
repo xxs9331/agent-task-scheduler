@@ -26,6 +26,8 @@ The CLI mode and envelope discriminator are both required to agree. `publish` ac
 
 ## Lifecycle and receipt
 
+The argument table below is the stable contract. Before execution, use `scheduler COMMAND --help` to confirm syntax against the installed version. Help does not replace the state, atomicity, authorization, or safety rules in this reference. If help and this contract disagree, stop and report the installed version and conflicting text instead of guessing.
+
 Lifecycle commands preserve the legacy command set (`status`, `ready`, `next`, `describe`, `claim`, `heartbeat`, `complete`, `retry`, `resume`, `continue`, `block`, `fail`, `release-expired`). Domain services, not CLI parsing, own state transitions. Every command emits stable JSON with `ok`, project context, and relevant task/state fields. `next` with no route returns `task: null` and structured `blocked_candidates`.
 
 The verified CLI accepts global `--project-root PATH`; `init --fresh` initializes or resets an isolated canonical project; `publish` accepts exactly one input source (`--from-file FILE`, `--stdin`, or `--json JSON`) and optional `--update`; `review-correct` requires terminal task, reviewer, pass/hold verdict, and summary; and `migrate` accepts at most one
