@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-task-scheduler"
-version = "0.2.1"
+version = "0.3.1"
 description = "Project-scoped task scheduler core"
 requires-python = ">=3.11"
 
@@ -16,12 +16,16 @@ test = [
 
 [project.scripts]
 scheduler = "agent_task_scheduler.cli.main:main"
+codex-team = "agent_task_scheduler.codex_team.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_task_scheduler"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills/global-scheduler" = "agent_task_scheduler/codex_team/assets/global-scheduler"
 
 [tool.ruff]
 target-version = "py311"

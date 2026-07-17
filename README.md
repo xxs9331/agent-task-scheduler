@@ -12,6 +12,38 @@ Skill 和 Python CLI，并将每个项目的配置、状态、锁、发布历史
 - 发布、原子权限校验、带 fencing token 的领取、续租、继续和完成任务。
 - 诊断路由、过期 lease、迁移和兼容性问题。
 - 隔离不同项目的状态、历史记录和锁。
+- 使用 `codex-team` 在任意项目初始化、诊断和启动全新的通用团队。
+
+## 可移植 Codex Team
+
+跨电脑首次使用只需要安装本插件；插件本身没有也不声称存在 post-install hook。重启
+Codex 后，在任意项目中对它说“安装 codex-team 并初始化团队模式”。Skill 会从自己的
+相对 `scripts/install_codex_team.py` 运行内置安装器，无需 clone、复制文件或定位插件
+缓存。安装器仅用内置 0.3.1 wheel 创建用户级隔离环境和受管理的 launcher，输出 JSON
+receipt；它绝不改写 PATH、bashrc 或 PowerShell profile。若 receipt 提示 bin 不在 PATH，
+只在当前 shell 执行其一次性提示即可。
+
+然后在目标项目目录运行：
+
+```bash
+codex-team init
+codex-team doctor
+codex-team start
+```
+
+所有命令默认当前目录；也可以显式给出含空格的项目路径：
+
+```bash
+codex-team init "/work/my project"
+codex-team role-A "/work/my project"
+```
+
+`init` 只写入项目本地 `.codex/`、`.agents/skills/` 和 scheduler bootstrap；已有内容
+与模板不同会列出冲突并拒绝覆盖。`doctor` 只验证这些静态文件，不能证明运行时 native
+identity。`start` 仅在 doctor 通过后调用 `codex -C <目标项目>`，要求新建
+`product_manager`（`fork_turns=none`）而不继承历史。`role-A/B/C/D/R` 分别映射到
+`window_a/window_b/window_c/window_d/researcher`，其 scheduler worker id 为小写
+`role-a...role-r`。
 
 ## Skill 是什么
 
@@ -61,7 +93,8 @@ codex plugin add global-scheduler@xxs9331-scheduler
 
 Skill 会安装仓库内置的 wheel、创建项目配置并执行 smoke check。只有运行 Codex 的
 用户需要安装插件；A/B/C/D/R 等执行角色在同一项目和 Codex 环境中使用它，无需各自
-重复安装。
+重复安装。首次需要 `codex-team` 时，改为让 Skill 运行其相对用户安装器；插件安装
+不会自动执行该代码。
 
 > 当前支持从本仓库这个自定义市场安装，但尚未收录到 OpenAI 默认 Codex 市场，
 > 因此暂时不能只在默认市场中搜索名称完成安装。
@@ -81,6 +114,8 @@ cp -R /path/to/agent-task-scheduler/skills/global-scheduler .agents/skills/
 - `.codex-plugin/plugin.json`：插件发现及展示元数据。
 - `skills/global-scheduler/SKILL.md`：触发规则与操作流程。
 - `skills/global-scheduler/scripts/install.py`：离线项目初始化程序。
+- `skills/global-scheduler/scripts/install_codex_team.py`：从内置 wheel 安全安装用户级
+  `codex-team` launcher 的一次性程序。
 - `skills/global-scheduler/assets/`：经过验证的内置 wheel。
 - `skills/global-scheduler/assets/任务计划书模板.md`：可直接复用的中文任务计划模板。
 - `skills/global-scheduler/references/`：契约、错误、迁移和平台边界。
@@ -90,7 +125,7 @@ cp -R /path/to/agent-task-scheduler/skills/global-scheduler .agents/skills/
 
 ```bash
 uv run --group test pytest -q
-uv run --with ruff ruff check src tests skills/global-scheduler/scripts/install.py
+uv run --with ruff ruff check src tests skills/global-scheduler/scripts
 ```
 
 安全、隐私和版本记录见 `SECURITY.md`、`PRIVACY.md` 和 `CHANGELOG.md`。

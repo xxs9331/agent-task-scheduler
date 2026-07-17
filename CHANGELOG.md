@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added the Skill-relative, offline `install_codex_team.py` user-command
+  installer. It creates a private environment from the bundled 0.3.1 wheel,
+  writes only a managed launcher, reports PATH guidance, and refuses conflicts.
+- Documented the complete marketplace-plugin to first-use `codex-team` flow for
+  POSIX and Windows without claiming a plugin post-install hook.
+- Added portable `codex-team` init, doctor, fresh root, and role launch commands.
+- Added project-local generic custom-agent, handoff, and staff-Skill templates.
+- Made team bootstrap reject conflicting files and never fall back to another project.
 - Added Chinese-first bilingual installation and usage documentation.
 - Added a Codex custom marketplace catalog and verified repository metadata.
 - Documented the Skill workflow and bundled the reusable Chinese task-plan template.

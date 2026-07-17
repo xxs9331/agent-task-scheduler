@@ -11,7 +11,7 @@ def test_that_plugin_manifest_points_to_discoverable_skills() -> None:
     manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text())
 
     assert manifest["name"] == "global-scheduler"
-    assert manifest["version"] == "0.2.1"
+    assert manifest["version"] == "0.3.1"
     assert manifest["skills"] == "./skills/"
     assert (ROOT / manifest["skills"] / "global-scheduler" / "SKILL.md").is_file()
     assert manifest["interface"]["capabilities"] == ["Interactive", "Read", "Write"]
@@ -52,6 +52,22 @@ def test_that_plugin_policy_and_progressive_references_exist() -> None:
         "skills/global-scheduler/assets/任务计划书模板.md",
     ):
         assert (ROOT / path).is_file(), path
+
+
+def test_that_wheel_configuration_includes_the_portable_skill_assets() -> None:
+    pyproject = (ROOT / "pyproject.toml").read_text()
+
+    assert (
+        '"skills/global-scheduler" = "agent_task_scheduler/codex_team/assets/global-scheduler"'
+        in pyproject
+    )
+
+
+def test_that_skill_bundles_the_relative_user_command_installer() -> None:
+    skill = ROOT / "skills" / "global-scheduler"
+
+    assert (skill / "scripts" / "install_codex_team.py").is_file()
+    assert (skill / "assets" / "agent_task_scheduler-0.3.1-py3-none-any.whl").is_file()
 
 
 def test_that_readmes_explain_the_skill_and_link_the_task_plan_template() -> None:

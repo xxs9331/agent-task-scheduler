@@ -5,6 +5,24 @@ description: "Use for project-scoped scheduler lifecycle, publication, review co
 
 # Global Scheduler Skill
 
+## First-use portable team bootstrap
+
+When a user asks to install `codex-team`, bootstrap a team, or initialize team
+mode after installing this plugin, run the installer from this Skill's own
+directory. Do not ask the user to locate a plugin cache or clone this repository:
+
+```bash
+python scripts/install_codex_team.py
+```
+
+The installer uses the bundled wheel, creates a private user environment, and
+places `codex-team` in the standard user bin directory. It emits one JSON receipt
+and never edits shell profiles or PATH. If the receipt says the bin is not on
+PATH, show its one-time path hint, then use `codex-team init`, `codex-team doctor`,
+and `codex-team start` from the target project. For a controlled installation or
+tests, pass `--prefix <temporary-prefix>`. It fails closed if an existing
+`codex-team` command is not managed by this installer.
+
 Use the installed project-local scheduler for durable task routing and lifecycle operations. This Skill stores no task data, grants no role additional authority, and never edits scheduler JSON directly.
 
 ## Core invariants
