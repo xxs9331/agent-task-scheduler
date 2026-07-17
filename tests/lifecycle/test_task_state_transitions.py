@@ -20,7 +20,12 @@ def test_that_heartbeat_by_task_owner_extends_an_active_lease() -> None:
     state = _state_with_running_task()
     service = LifecycleService(now=_fixed_now)
 
-    receipt = service.heartbeat(state, task_id="task-a", worker_id="window-a")
+    receipt = service.heartbeat(
+        state,
+        task_id="task-a",
+        worker_id="window-a",
+        lease_id="lease-current",
+    )
 
     assert receipt["ok"] is True
     assert state["tasks"]["task-a"]["lease_expires_at"] == "2026-07-13T03:05:00+00:00"
@@ -30,7 +35,13 @@ def test_that_completing_a_running_task_clears_its_lease() -> None:
     state = _state_with_running_task()
     service = LifecycleService(now=_fixed_now)
 
-    receipt = service.complete(state, task_id="task-a", worker_id="window-a")
+    receipt = service.complete(
+        state,
+        task_id="task-a",
+        worker_id="window-a",
+        lease_id="lease-current",
+        summary="verified",
+    )
 
     task = state["tasks"]["task-a"]
     assert receipt["ok"] is True
@@ -87,6 +98,178 @@ def test_that_next_filters_required_worker_before_recommending_ready_task() -> N
     assert receipt["recommended_task_id"] == "task-b"
 
 
+def test_that_claim_rejects_unknown_and_non_executable_workers_atomically() -> None:
+    state = _state_with_ready_task()
+    state["staff_model"] = {
+        "staff": {
+            "window-a": _worker_profile(),
+            "publisher": _worker_profile(can_execute_tasks=False),
+        }
+    }
+    service = LifecycleService(now=_fixed_now)
+
+    unknown = service.claim(state, task_id="task-a", worker_id="unknown")
+    publisher = service.claim(state, task_id="task-a", worker_id="publisher")
+
+    assert unknown == {
+        "ok": False,
+        "reason": "unknown_worker",
+        "task_id": "task-a",
+        "worker_id": "unknown",
+    }
+    assert publisher == {
+        "ok": False,
+        "reason": "staff_cannot_execute_tasks",
+        "task_id": "task-a",
+        "worker_id": "publisher",
+    }
+    assert state["tasks"]["task-a"]["status"] == "ready"
+
+
+def test_that_claim_rechecks_required_worker_agent_type_kind_and_fallback_metadata() -> (
+    None
+):
+    state = _state_with_ready_task()
+    task = state["tasks"]["task-a"]
+    task.update(
+        {
+            "required_worker": "role-p",
+            "metadata": {"team_mode": {"kind": "pm_fallback"}},
+        }
+    )
+    state["staff_model"] = {
+        "staff": {
+            "window-a": _worker_profile(),
+            "role-p": _worker_profile(
+                allowed_task_kinds=["pm_fallback"],
+                required_metadata_by_kind={
+                    "pm_fallback": [
+                        "fallback_authorization.original_task_id",
+                        "fallback_authorization.user_authorization",
+                        "fallback_authorization.return_gate_task_id",
+                    ]
+                },
+            ),
+        }
+    }
+    service = LifecycleService(now=_fixed_now)
+
+    wrong_worker = service.claim(state, task_id="task-a", worker_id="window-a")
+    missing_metadata = service.claim(state, task_id="task-a", worker_id="role-p")
+    task["metadata"]["fallback_authorization"] = {
+        "original_task_id": "original",
+        "user_authorization": "approved",
+        "return_gate_task_id": "gate",
+    }
+    accepted = service.claim(state, task_id="task-a", worker_id="role-p")
+
+    assert wrong_worker["reason"] == "required_worker_mismatch"
+    assert missing_metadata == {
+        "ok": False,
+        "reason": "required_metadata_missing",
+        "task_id": "task-a",
+        "worker_id": "role-p",
+        "missing": [
+            "fallback_authorization.original_task_id",
+            "fallback_authorization.user_authorization",
+            "fallback_authorization.return_gate_task_id",
+        ],
+    }
+    assert accepted["ok"] is True
+
+
+def test_that_claim_rejects_overlapping_writable_paths_even_across_domains() -> None:
+    state = _state_with_ready_task()
+    state["tasks"]["task-a"]["worker_prompt"] = {
+        "writable_scope": ["src/parlant/core/**"]
+    }
+    state["tasks"]["active"] = {
+        **state["tasks"]["task-a"],
+        "task_id": "active",
+        "status": "running",
+        "owner": "window-b",
+        "conflict_domain": "different-domain",
+        "worker_prompt": {"writable_scope": ["src/parlant/core/engines/alpha.py"]},
+        "lease_id": "active-lease",
+        "lease_expires_at": "2026-07-13T03:30:00+00:00",
+    }
+    service = LifecycleService(now=_fixed_now)
+
+    receipt = service.claim(state, task_id="task-a", worker_id="window-a")
+
+    assert receipt["ok"] is False
+    assert receipt["reason"] == "writable_path_locked"
+    assert receipt["task_id"] == "active"
+
+
+def test_that_stale_lease_token_cannot_heartbeat_or_complete_a_new_attempt() -> None:
+    lease_ids = iter(["lease-old", "lease-new"])
+    state = _state_with_ready_task()
+    service = LifecycleService(now=_fixed_now, lease_id_factory=lambda: next(lease_ids))
+
+    first_claim = service.claim(state, task_id="task-a", worker_id="window-a")
+    state["tasks"]["task-a"]["lease_expires_at"] = "2026-07-13T02:59:00+00:00"
+    service.release_expired(state)
+    second_claim = service.claim(state, task_id="task-a", worker_id="window-a")
+    stale_heartbeat = service.heartbeat(
+        state,
+        task_id="task-a",
+        worker_id="window-a",
+        lease_id=first_claim["lease_id"],
+    )
+    stale_complete = service.complete(
+        state,
+        task_id="task-a",
+        worker_id="window-a",
+        lease_id=first_claim["lease_id"],
+        summary="stale process",
+    )
+
+    assert first_claim["lease_id"] == "lease-old"
+    assert second_claim["lease_id"] == "lease-new"
+    assert stale_heartbeat["reason"] == "stale_lease"
+    assert stale_complete["reason"] == "stale_lease"
+    assert state["tasks"]["task-a"]["status"] == "running"
+
+
+def test_that_terminal_receipt_records_fence_attempt_summary_and_release() -> None:
+    state = _state_with_ready_task()
+    service = LifecycleService(now=_fixed_now, lease_id_factory=lambda: "lease-1")
+
+    claim = service.claim(state, task_id="task-a", worker_id="window-a")
+    missing_summary = service.complete(
+        state,
+        task_id="task-a",
+        worker_id="window-a",
+        lease_id=claim["lease_id"],
+    )
+    completed = service.complete(
+        state,
+        task_id="task-a",
+        worker_id="window-a",
+        lease_id=claim["lease_id"],
+        summary="all focused tests passed",
+    )
+
+    assert missing_summary == {
+        "ok": False,
+        "reason": "summary_required",
+        "task_id": "task-a",
+    }
+    assert completed == {
+        "ok": True,
+        "task_id": "task-a",
+        "status": "done",
+        "owner": "window-a",
+        "attempt": 1,
+        "lease_id": "lease-1",
+        "completed_at": "2026-07-13T03:00:00+00:00",
+        "summary": "all focused tests passed",
+        "lease_released": True,
+    }
+    assert state["tasks"]["task-a"]["completion_receipt"] == completed
+
+
 def test_that_next_reports_structured_blocked_candidates_when_no_task_is_routable() -> (
     None
 ):
@@ -120,6 +303,7 @@ def test_that_describe_returns_selected_task_fields_and_retry_records_handoff() 
         state,
         task_id="task-a",
         worker_id="window-a",
+        lease_id="lease-current",
         reason="needs evidence",
         last_attempt_summary="partial",
         next_attempt_instruction="retry focused tests",
@@ -188,15 +372,27 @@ def test_that_block_fail_and_release_expired_clear_leases_with_legacy_statuses()
     service = LifecycleService(now=_fixed_now)
 
     blocked = service.block(
-        state, task_id="task-a", worker_id="window-a", reason="waiting"
+        state,
+        task_id="task-a",
+        worker_id="window-a",
+        lease_id="lease-current",
+        reason="waiting",
     )
     failed = service.fail(
-        state, task_id="task-b", worker_id="window-b", reason="bad input"
+        state,
+        task_id="task-b",
+        worker_id="window-b",
+        lease_id="lease-current",
+        reason="bad input",
     )
     released = service.release_expired(state)
 
-    assert blocked == {"ok": True, "task_id": "task-a", "status": "blocked"}
-    assert failed == {"ok": True, "task_id": "task-b", "status": "failed"}
+    assert blocked["ok"] is True
+    assert blocked["status"] == "blocked"
+    assert blocked["lease_released"] is True
+    assert failed["ok"] is True
+    assert failed["status"] == "failed"
+    assert failed["lease_released"] is True
     assert released == {"ok": True, "released": ["expired"]}
     assert state["tasks"]["expired"]["status"] == "ready"
 
@@ -218,6 +414,9 @@ def _state_with_ready_task() -> dict[str, object]:
             }
         },
         "publish_history": [],
+        "staff_model": {
+            "staff": {"window-a": _worker_profile(), "window-b": _worker_profile()}
+        },
     }
 
 
@@ -230,6 +429,8 @@ def _state_with_running_task() -> dict[str, object]:
             "status": "running",
             "owner": "window-a",
             "lease_expires_at": "2026-07-13T03:30:00+00:00",
+            "lease_id": "lease-current",
+            "lease_metadata": {},
         }
     )
     return state
@@ -237,3 +438,17 @@ def _state_with_running_task() -> dict[str, object]:
 
 def _fixed_now() -> datetime:
     return datetime(2026, 7, 13, 3, 0, tzinfo=UTC)
+
+
+def _worker_profile(
+    *,
+    can_execute_tasks: bool = True,
+    allowed_task_kinds: list[str] | None = None,
+    required_metadata_by_kind: dict[str, list[str]] | None = None,
+) -> dict[str, object]:
+    return {
+        "can_execute_tasks": can_execute_tasks,
+        "allowed_agent_types": ["task_executor"],
+        "allowed_task_kinds": allowed_task_kinds or ["unclassified", "implementation"],
+        "required_metadata_by_kind": required_metadata_by_kind or {},
+    }

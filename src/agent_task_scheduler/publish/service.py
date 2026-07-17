@@ -18,6 +18,8 @@ _CREATE_FIELDS = {
     "depends_on",
     "conflict_domain",
     "preferred_worker",
+    "required_worker",
+    "writable_files",
     "worker_prompt",
     "title",
     "description",
@@ -31,7 +33,7 @@ _REQUIRED_CREATE_FIELDS = {
     "preferred_worker",
     "worker_prompt",
 }
-_UPDATE_FIELDS = _CREATE_FIELDS - {"task_id"}
+_UPDATE_FIELDS = _CREATE_FIELDS - {"task_id", "required_worker"}
 _UPDATABLE_STATUSES = {"ready", "blocked_waiting_dependency"}
 
 
@@ -254,6 +256,7 @@ def _valid_task_fields(task: Mapping[str, object], *, partial: bool = False) -> 
         "agent_type",
         "conflict_domain",
         "preferred_worker",
+        "required_worker",
         "title",
         "description",
     }
@@ -263,6 +266,11 @@ def _valid_task_fields(task: Mapping[str, object], *, partial: bool = False) -> 
     if "depends_on" in task and (
         not isinstance(task["depends_on"], list)
         or not all(isinstance(value, str) and value for value in task["depends_on"])
+    ):
+        return False
+    if "writable_files" in task and (
+        not isinstance(task["writable_files"], list)
+        or not all(isinstance(value, str) and value for value in task["writable_files"])
     ):
         return False
     return all(

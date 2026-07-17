@@ -12,12 +12,14 @@ Use the installed project-local scheduler for durable task routing and lifecycle
 - Use the scheduler executable installed for the current project and pass an explicit project root when needed.
 - Run one scheduler command per tool call. Do not combine lifecycle commands with pipes, shell chaining, environment wrappers, or ad hoc state edits.
 - The configured project state is the sole task and lease truth. Never fall back to, copy, or silently migrate another task pool.
-- Role configuration and the task prompt determine who may publish, review, or execute. This Skill describes mechanics; it grants no permission.
+- The scheduler worker registry and task fields mechanically constrain claim authority. Role TOML and task prompts may narrow behavior but cannot grant scheduler permission. This Skill describes mechanics; it grants no permission.
 - Routine scheduled work ends with concise `complete --summary`; use `block --reason` or `fail --reason` when appropriate. Do not require extra handoff reports by default.
 
 ## Normal routing
 
-Use `next`, then `claim`, then `describe`; follow the returned `worker_prompt` and operate lifecycle commands only as the owning worker. If no task is routable, inspect blocked-candidate evidence rather than inventing work.
+Use `next`, then `claim`, then `describe`; record the returned `lease_id`, follow the returned `worker_prompt`, and operate lifecycle commands only as the owning worker with the current token. Bind a native Codex thread with `claim --agent-id ID` when that identity is available. If no task is routable, inspect blocked-candidate evidence rather than inventing work.
+
+`heartbeat`, `complete`, `retry`, `block`, and `fail` require `--lease-id`. Completion also requires a non-empty `--summary`. A child-agent turn ending is not task completion: the parent re-runs `describe` and verifies `status=done`, summary, completion receipt, and task evidence before reporting success. A child ending while the task remains `running` is an early exit/orphan candidate, not success.
 
 If syntax is uncertain, run that subcommand's `--help`. Help is runtime syntax truth; references define state, atomicity, and safety. If help and a reference disagree, stop and report the installed version and conflict.
 

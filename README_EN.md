@@ -9,7 +9,7 @@ history, and optional observation logs isolated inside each project.
 ## Features
 
 - Bootstrap a project-scoped scheduler without downloading its Python package.
-- Publish, claim, heartbeat, resume, and complete tasks.
+- Publish tasks and claim them through atomic worker authorization and fenced leases.
 - Diagnose routing, expired leases, migration, and compatibility issues.
 - Isolate scheduler state, history, and locks between projects.
 
@@ -81,3 +81,9 @@ uv run --with ruff ruff check src tests skills/global-scheduler/scripts/install.
 
 See `SECURITY.md`, `PRIVACY.md`, and `CHANGELOG.md` for operational boundaries
 and release history.
+
+Since 0.2.0, projects provision a scheduler worker registry with `staff-sync`
+before `next` or `claim`. Each successful claim returns a unique `lease_id`;
+heartbeat and active-attempt terminal commands must return that token.
+Completion requires `--summary` and stores a durable receipt so a parent agent
+can reconcile scheduler state after a native Codex child turn ends.

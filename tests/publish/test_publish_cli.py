@@ -102,6 +102,7 @@ def test_that_init_fresh_creates_a_canonical_project_and_replaces_its_state(
         "tasks": {},
         "publish_history": [],
         "review_decisions": [],
+        "staff_model": {"staff": {}},
     }
 
 
@@ -300,6 +301,116 @@ def test_that_continue_cli_routes_to_continue_task_and_persists_state(
     assert persisted["tasks"]["task-a"]["owner"] == "worker"
 
 
+def test_that_staff_sync_makes_claim_authority_machine_readable(
+    tmp_path: Path, capsys
+) -> None:
+    scheduler = _create_project(tmp_path, events_path=None)
+    state_path = scheduler / "state.json"
+    state_path.write_text(json.dumps(_legacy_state()), encoding="utf-8")
+    envelope = {
+        "input_schema_version": 1,
+        "workers": {
+            "worker": {
+                "can_execute_tasks": True,
+                "allowed_agent_types": ["task_executor"],
+                "allowed_task_kinds": ["unclassified"],
+                "required_metadata_by_kind": {},
+            }
+        },
+    }
+
+    sync_exit = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "staff-sync",
+            "--json",
+            json.dumps(envelope),
+        ]
+    )
+    sync_receipt = json.loads(capsys.readouterr().out)
+    claim_exit = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "claim",
+            "--task",
+            "task-a",
+            "--worker",
+            "worker",
+            "--agent-id",
+            "thread-123",
+        ]
+    )
+    claim_receipt = json.loads(capsys.readouterr().out)
+
+    assert sync_exit == claim_exit == 0
+    assert sync_receipt["operation"] == "staff_sync"
+    assert claim_receipt["lease_id"]
+    assert claim_receipt["lease_metadata"] == {"agent_id": "thread-123"}
+    persisted = json.loads(state_path.read_text(encoding="utf-8"))
+    assert persisted["staff_model"]["staff"]["worker"]["can_execute_tasks"] is True
+
+
+def test_that_complete_cli_requires_and_checks_the_current_lease_token(
+    tmp_path: Path, capsys
+) -> None:
+    scheduler = _create_project(tmp_path, events_path=None)
+    state = _legacy_state()
+    task = state["tasks"]["task-a"]
+    assert isinstance(task, dict)
+    task.update(
+        {
+            "status": "running",
+            "owner": "worker",
+            "lease_id": "current-token",
+            "lease_metadata": {"agent_id": "thread-new"},
+            "lease_expires_at": "2999-07-13T03:30:00+00:00",
+        }
+    )
+    state_path = scheduler / "state.json"
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    stale_exit = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "complete",
+            "--task",
+            "task-a",
+            "--worker",
+            "worker",
+            "--lease-id",
+            "stale-token",
+            "--summary",
+            "should not commit",
+        ]
+    )
+    stale_receipt = json.loads(capsys.readouterr().out)
+    current_exit = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "complete",
+            "--task",
+            "task-a",
+            "--worker",
+            "worker",
+            "--lease-id",
+            "current-token",
+            "--summary",
+            "verified",
+        ]
+    )
+    current_receipt = json.loads(capsys.readouterr().out)
+
+    assert stale_exit == 1
+    assert stale_receipt["reason"] == "stale_lease"
+    assert current_exit == 0
+    assert current_receipt["status"] == "done"
+    assert current_receipt["summary"] == "verified"
+
+
 def _validate_success_receipt(receipt: dict[str, object]) -> None:
     schema_path = Path(__file__).parents[2] / "schemas" / "receipt.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -364,4 +475,16 @@ def _legacy_state() -> dict[str, object]:
             }
         },
         "task_order": ["task-a"],
+        "publish_history": [],
+        "review_decisions": [],
+        "staff_model": {
+            "staff": {
+                "worker": {
+                    "can_execute_tasks": True,
+                    "allowed_agent_types": ["task_executor"],
+                    "allowed_task_kinds": ["unclassified"],
+                    "required_metadata_by_kind": {},
+                }
+            }
+        },
     }

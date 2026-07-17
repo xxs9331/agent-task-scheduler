@@ -9,7 +9,7 @@ Skill 和 Python CLI，并将每个项目的配置、状态、锁、发布历史
 ## 功能
 
 - 初始化项目级调度器，无需在线下载 Python 包。
-- 发布、领取、续租、继续和完成任务。
+- 发布、原子权限校验、带 fencing token 的领取、续租、继续和完成任务。
 - 诊断路由、过期 lease、迁移和兼容性问题。
 - 隔离不同项目的状态、历史记录和锁。
 
@@ -28,8 +28,14 @@ Skill 和 Python CLI，并将每个项目的配置、状态、锁、发布历史
 - “先 dry-run 检查旧任务池是否可以迁移。”
 
 典型流程是：Codex 读取 Skill → 定位当前项目配置 → 调用项目内的 `scheduler` CLI →
-根据 JSON receipt 判断成功、重试或停止。Skill 明确禁止跨项目复用状态、直接编辑状态
+根据 JSON receipt 判断成功、重试或停止。worker roster 通过 `staff-sync` 写入项目状态，
+`claim` 在同一锁事务内复核 worker、任务 kind、required worker、依赖和写范围冲突；
+Skill 明确禁止跨项目复用状态、直接编辑状态
 JSON、静默迁移 legacy 数据，以及在等待 gate 时长期占用任务 lease。
+
+从 0.2.0 起，`claim` 返回唯一 `lease_id`；`heartbeat`、`complete`、`block`、`fail`
+和 `retry` 必须回传该 token。`complete --summary` 为必填，父代理应在子线程结束后重新
+`describe`，只把持久 `done`、summary、receipt 和任务验证证据同时成立视为完成。
 
 复杂任务拆分可以从随插件安装的
 [《任务计划书模板》](skills/global-scheduler/assets/任务计划书模板.md)开始。模板包含调研、

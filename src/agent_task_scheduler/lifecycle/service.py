@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
 from datetime import UTC, datetime, timedelta
+from pathlib import PurePosixPath
 from typing import cast
+from uuid import uuid4
 
 State = MutableMapping[str, object]
 Task = MutableMapping[str, object]
@@ -36,6 +38,9 @@ _DESCRIBE_FIELDS = (
     "artifacts",
     "parent_task",
     "branch",
+    "summary",
+    "completion_receipt",
+    "terminal_receipt",
 )
 
 
@@ -46,15 +51,22 @@ class LifecycleService:
         self,
         now: Callable[[], datetime] | None = None,
         lease_duration: timedelta = timedelta(minutes=5),
+        lease_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._now = now or _utc_now
         self._lease_duration = lease_duration
+        self._lease_id_factory = lease_id_factory or (lambda: str(uuid4()))
 
     def status(self, state: State) -> Receipt:
         tasks = self._tasks(state)
         return {
             "ok": True,
-            "tasks": tasks,
+            "tasks": {
+                task_id: {
+                    key: value for key, value in task.items() if key != "lease_id"
+                }
+                for task_id, task in tasks.items()
+            },
             "active_leases": [
                 {"task_id": task_id, "owner": task.get("owner")}
                 for task_id, task in tasks.items()
@@ -67,7 +79,9 @@ class LifecycleService:
 
     def next(self, state: State, *, worker_id: str) -> Receipt:
         tasks = self._tasks(state)
-        profile = self._staff_profiles(state).get(worker_id, {})
+        profile = self._staff_profiles(state).get(worker_id)
+        if profile is None:
+            return {"ok": False, "reason": "unknown_worker", "worker_id": worker_id}
         if not bool(profile.get("can_execute_tasks", True)):
             return {
                 "ok": False,
@@ -126,7 +140,14 @@ class LifecycleService:
             **{key: task[key] for key in _DESCRIBE_FIELDS if key in task},
         }
 
-    def claim(self, state: State, *, task_id: str, worker_id: str) -> Receipt:
+    def claim(
+        self,
+        state: State,
+        *,
+        task_id: str,
+        worker_id: str,
+        agent_id: str | None = None,
+    ) -> Receipt:
         task = self._tasks(state).get(task_id)
         if task is None:
             return self._not_found(task_id)
@@ -137,6 +158,9 @@ class LifecycleService:
                 "task_id": task_id,
                 "status": task.get("status"),
             }
+        authorization = self._claim_authorization_error(state, task_id, task, worker_id)
+        if authorization is not None:
+            return authorization
         missing = self._dependencies_done(task, self._tasks(state))
         if missing:
             return {
@@ -147,11 +171,13 @@ class LifecycleService:
         conflict = self._active_conflict(task_id, task, self._tasks(state))
         if conflict is not None:
             return conflict
-        self._start(task, worker_id)
+        self._start(task, worker_id, agent_id)
         return self._running_receipt(task_id, task)
 
-    def heartbeat(self, state: State, *, task_id: str, worker_id: str) -> Receipt:
-        task = self._owned_task(state, task_id, worker_id)
+    def heartbeat(
+        self, state: State, *, task_id: str, worker_id: str, lease_id: str
+    ) -> Receipt:
+        task = self._owned_task(state, task_id, worker_id, lease_id)
         if "ok" in task:
             return task
         task["status"] = "running"
@@ -160,17 +186,38 @@ class LifecycleService:
         return self._running_receipt(task_id, task)
 
     def complete(
-        self, state: State, *, task_id: str, worker_id: str, summary: str | None = None
+        self,
+        state: State,
+        *,
+        task_id: str,
+        worker_id: str,
+        lease_id: str,
+        summary: str | None = None,
     ) -> Receipt:
-        task = self._owned_task(state, task_id, worker_id)
+        task = self._owned_task(state, task_id, worker_id, lease_id)
         if "ok" in task:
             return task
+        if not isinstance(summary, str) or not summary.strip():
+            return {"ok": False, "reason": "summary_required", "task_id": task_id}
+        attempt = _int_value(task.get("attempt"))
+        completed_at = self._iso_now()
         task["status"] = "done"
-        task["completed_at"] = self._iso_now()
-        if summary is not None:
-            task["summary"] = summary
+        task["completed_at"] = completed_at
+        task["summary"] = summary
+        receipt: Receipt = {
+            "ok": True,
+            "task_id": task_id,
+            "status": "done",
+            "owner": worker_id,
+            "attempt": attempt,
+            "lease_id": lease_id,
+            "completed_at": completed_at,
+            "summary": summary,
+            "lease_released": True,
+        }
+        task["completion_receipt"] = dict(receipt)
         self._clear_lease(task)
-        return {"ok": True, "task_id": task_id, "status": "done"}
+        return receipt
 
     def retry(
         self,
@@ -178,11 +225,12 @@ class LifecycleService:
         *,
         task_id: str,
         worker_id: str,
+        lease_id: str,
         reason: str,
         last_attempt_summary: str,
         next_attempt_instruction: str,
     ) -> Receipt:
-        task = self._owned_task(state, task_id, worker_id)
+        task = self._owned_task(state, task_id, worker_id, lease_id)
         if "ok" in task:
             return task
         task.update(
@@ -237,7 +285,14 @@ class LifecycleService:
         self._clear_lease(task)
         return {"ok": True, "task_id": task_id, "status": "retry_ready"}
 
-    def continue_task(self, state: State, *, task_id: str, worker_id: str) -> Receipt:
+    def continue_task(
+        self,
+        state: State,
+        *,
+        task_id: str,
+        worker_id: str,
+        agent_id: str | None = None,
+    ) -> Receipt:
         task = self._tasks(state).get(task_id)
         if task is None:
             return self._not_found(task_id)
@@ -256,6 +311,9 @@ class LifecycleService:
                 "task_id": task_id,
                 "preferred_worker": preferred_worker,
             }
+        authorization = self._claim_authorization_error(state, task_id, task, worker_id)
+        if authorization is not None:
+            return authorization
         attempt = _int_value(task.get("attempt"))
         max_attempts = _int_value(task.get("max_attempts"))
         if task.get("max_attempts") is not None and attempt >= max_attempts:
@@ -276,18 +334,30 @@ class LifecycleService:
         conflict = self._active_conflict(task_id, task, self._tasks(state))
         if conflict is not None:
             return conflict
-        self._start(task, worker_id)
+        self._start(task, worker_id, agent_id)
         return self._continue_receipt(task_id, task)
 
     def block(
-        self, state: State, *, task_id: str, worker_id: str, reason: str
+        self,
+        state: State,
+        *,
+        task_id: str,
+        worker_id: str,
+        lease_id: str,
+        reason: str,
     ) -> Receipt:
-        return self._terminal(state, task_id, worker_id, reason, "blocked")
+        return self._terminal(state, task_id, worker_id, lease_id, reason, "blocked")
 
     def fail(
-        self, state: State, *, task_id: str, worker_id: str, reason: str
+        self,
+        state: State,
+        *,
+        task_id: str,
+        worker_id: str,
+        lease_id: str,
+        reason: str,
     ) -> Receipt:
-        return self._terminal(state, task_id, worker_id, reason, "failed")
+        return self._terminal(state, task_id, worker_id, lease_id, reason, "failed")
 
     def release_expired(self, state: State) -> Receipt:
         tasks = self._tasks(state)
@@ -308,21 +378,41 @@ class LifecycleService:
         return {"ok": True, "released": released}
 
     def _terminal(
-        self, state: State, task_id: str, worker_id: str, reason: str, status: str
+        self,
+        state: State,
+        task_id: str,
+        worker_id: str,
+        lease_id: str,
+        reason: str,
+        status: str,
     ) -> Receipt:
-        task = self._owned_task(state, task_id, worker_id)
+        task = self._owned_task(state, task_id, worker_id, lease_id)
         if "ok" in task:
             return task
+        attempt = _int_value(task.get("attempt"))
+        terminal_at = self._iso_now()
         task.update(
             {
                 "status": status,
                 "reason": reason,
                 "last_owner": worker_id,
-                f"{status}_at": self._iso_now(),
+                f"{status}_at": terminal_at,
             }
         )
+        receipt: Receipt = {
+            "ok": True,
+            "task_id": task_id,
+            "status": status,
+            "owner": worker_id,
+            "attempt": attempt,
+            "lease_id": lease_id,
+            f"{status}_at": terminal_at,
+            "reason": reason,
+            "lease_released": True,
+        }
+        task["terminal_receipt"] = dict(receipt)
         self._clear_lease(task)
-        return {"ok": True, "task_id": task_id, "status": status}
+        return receipt
 
     def _tasks(self, state: State) -> dict[str, Task]:
         raw_tasks = state.get("tasks")
@@ -335,7 +425,9 @@ class LifecycleService:
             if isinstance(value, MutableMapping)
         }
 
-    def _owned_task(self, state: State, task_id: str, worker_id: str) -> Task | Receipt:
+    def _owned_task(
+        self, state: State, task_id: str, worker_id: str, lease_id: str
+    ) -> Task | Receipt:
         task = self._tasks(state).get(task_id)
         if task is None:
             return self._not_found(task_id)
@@ -343,6 +435,8 @@ class LifecycleService:
             return {"ok": False, "reason": "not_task_owner", "task_id": task_id}
         if not self._is_active_lease(task):
             return {"ok": False, "reason": "lease_expired", "task_id": task_id}
+        if task.get("lease_id") != lease_id:
+            return {"ok": False, "reason": "stale_lease", "task_id": task_id}
         return task
 
     def _ready_task_ids(self, state: State) -> list[str]:
@@ -383,9 +477,17 @@ class LifecycleService:
                 blocked.append(
                     {
                         "task_id": task_id,
-                        "reason": "conflict_domain_locked",
-                        "conflict_domain": conflict["conflict_domain"],
-                        "owner": conflict["owner"],
+                        "reason": conflict["reason"],
+                        "active_task_id": conflict["task_id"],
+                        **{
+                            key: conflict[key]
+                            for key in (
+                                "conflict_domain",
+                                "owner",
+                                "writable_overlap",
+                            )
+                            if key in conflict
+                        },
                     }
                 )
                 continue
@@ -408,11 +510,10 @@ class LifecycleService:
         self, task_id: str, task: Task, tasks: dict[str, Task]
     ) -> Receipt | None:
         domain = task.get("conflict_domain")
-        if not domain:
-            return None
         for other_id, other_task in tasks.items():
             if (
                 other_id != task_id
+                and domain
                 and other_task.get("conflict_domain") == domain
                 and self._is_active_lease(other_task)
             ):
@@ -422,6 +523,16 @@ class LifecycleService:
                     "conflict_domain": domain,
                     "owner": other_task.get("owner"),
                     "task_id": other_id,
+                }
+            overlap = _writable_scope_overlap(task, other_task)
+            if other_id != task_id and self._is_active_lease(other_task) and overlap:
+                return {
+                    "ok": False,
+                    "reason": "writable_path_locked",
+                    "conflict_domain": other_task.get("conflict_domain"),
+                    "owner": other_task.get("owner"),
+                    "task_id": other_id,
+                    "writable_overlap": overlap,
                 }
         return None
 
@@ -435,13 +546,15 @@ class LifecycleService:
             > self._now()
         )
 
-    def _start(self, task: Task, worker_id: str) -> None:
+    def _start(self, task: Task, worker_id: str, agent_id: str | None) -> None:
         task["status"] = "running"
         task["owner"] = worker_id
         task["attempt"] = _int_value(task.get("attempt")) + 1
         task["started_at"] = task.get("started_at", self._iso_now())
         task["last_heartbeat_at"] = self._iso_now()
         task["lease_expires_at"] = self._lease_expiry()
+        task["lease_id"] = self._lease_id_factory()
+        task["lease_metadata"] = {"agent_id": agent_id} if agent_id else {}
 
     def _staff_profiles(self, state: State) -> dict[str, Task]:
         model = state.get("staff_model")
@@ -457,7 +570,7 @@ class LifecycleService:
         )
 
     def _profile_filter_reason(
-        self, task: Task, worker_id: str, _profile: Task
+        self, task: Task, worker_id: str, profile: Task
     ) -> Receipt | None:
         if (
             task.get("required_worker") is not None
@@ -466,6 +579,78 @@ class LifecycleService:
             return {
                 "reason": "required_worker_mismatch",
                 "required_worker": str(task["required_worker"]),
+            }
+        agent_type = task.get("agent_type")
+        allowed_agent_types = profile.get("allowed_agent_types")
+        if (
+            not isinstance(allowed_agent_types, list)
+            or agent_type not in allowed_agent_types
+        ):
+            return {"reason": "agent_type_not_allowed", "agent_type": agent_type}
+        kind = _task_kind(task)
+        allowed_kinds = profile.get("allowed_task_kinds")
+        if not isinstance(allowed_kinds, list) or kind not in allowed_kinds:
+            return {"reason": "task_kind_not_allowed", "task_kind": kind}
+        return None
+
+    def _claim_authorization_error(
+        self, state: State, task_id: str, task: Task, worker_id: str
+    ) -> Receipt | None:
+        profile = self._staff_profiles(state).get(worker_id)
+        if profile is None:
+            return {
+                "ok": False,
+                "reason": "unknown_worker",
+                "task_id": task_id,
+                "worker_id": worker_id,
+            }
+        if not bool(profile.get("can_execute_tasks", False)):
+            return {
+                "ok": False,
+                "reason": "staff_cannot_execute_tasks",
+                "task_id": task_id,
+                "worker_id": worker_id,
+            }
+        for other_id, other in self._tasks(state).items():
+            if (
+                other_id != task_id
+                and other.get("owner") == worker_id
+                and self._is_active_lease(other)
+            ):
+                return {
+                    "ok": False,
+                    "reason": "worker_already_leased",
+                    "task_id": task_id,
+                    "worker_id": worker_id,
+                    "active_task_id": other_id,
+                }
+        reason = self._profile_filter_reason(task, worker_id, profile)
+        if reason is not None:
+            return {
+                "ok": False,
+                "task_id": task_id,
+                "worker_id": worker_id,
+                **reason,
+            }
+        kind = _task_kind(task)
+        requirements = profile.get("required_metadata_by_kind", {})
+        required_paths = (
+            requirements.get(kind, [])
+            if isinstance(requirements, MutableMapping)
+            else []
+        )
+        missing = [
+            path
+            for path in required_paths
+            if isinstance(path, str) and _metadata_value(task, path) is None
+        ]
+        if missing:
+            return {
+                "ok": False,
+                "reason": "required_metadata_missing",
+                "task_id": task_id,
+                "worker_id": worker_id,
+                "missing": missing,
             }
         return None
 
@@ -486,6 +671,8 @@ class LifecycleService:
             "read_only_files",
             "must_not_touch",
             "lease_expires_at",
+            "lease_id",
+            "lease_metadata",
         )
         return {
             "ok": True,
@@ -501,10 +688,19 @@ class LifecycleService:
             "status": "running",
             "owner": task.get("owner"),
             "lease_expires_at": task.get("lease_expires_at"),
+            "lease_id": task.get("lease_id"),
+            "attempt": task.get("attempt"),
+            "lease_metadata": task.get("lease_metadata", {}),
         }
 
     def _clear_lease(self, task: Task) -> None:
-        for field in ("owner", "lease_expires_at", "last_heartbeat_at"):
+        for field in (
+            "owner",
+            "lease_expires_at",
+            "last_heartbeat_at",
+            "lease_id",
+            "lease_metadata",
+        ):
             task.pop(field, None)
 
     def _lease_expiry(self) -> str:
@@ -536,6 +732,71 @@ def _parse_datetime(value: object) -> datetime | None:
     return (
         parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
     )
+
+
+def _task_kind(task: Task) -> str:
+    metadata = task.get("metadata")
+    if not isinstance(metadata, MutableMapping):
+        return "unclassified"
+    team_mode = metadata.get("team_mode")
+    if isinstance(team_mode, MutableMapping) and isinstance(team_mode.get("kind"), str):
+        return str(team_mode["kind"])
+    return str(metadata.get("kind", "unclassified"))
+
+
+def _metadata_value(task: Task, path: str) -> object | None:
+    value: object = task.get("metadata")
+    for part in path.split("."):
+        if not isinstance(value, MutableMapping) or part not in value:
+            return None
+        value = value[part]
+    return value
+
+
+def _writable_scopes(task: Task) -> list[str]:
+    direct = task.get("writable_files")
+    prompt = task.get("worker_prompt")
+    prompt_scope = (
+        prompt.get("writable_scope") if isinstance(prompt, MutableMapping) else None
+    )
+    values = direct if isinstance(direct, list) else prompt_scope
+    return [str(value) for value in values] if isinstance(values, list) else []
+
+
+def _scope_prefix(value: str) -> str | None:
+    normalized = value.strip().replace("\\", "/")
+    if not normalized or " via " in normalized:
+        return None
+    wildcard_positions = [
+        position
+        for token in ("*", "?", "[")
+        if (position := normalized.find(token)) >= 0
+    ]
+    if wildcard_positions:
+        normalized = normalized[: min(wildcard_positions)]
+    normalized = normalized.rstrip("/")
+    if not normalized:
+        return None
+    return str(PurePosixPath(normalized))
+
+
+def _writable_scope_overlap(left: Task, right: Task) -> list[str]:
+    overlaps: list[str] = []
+    for left_scope in _writable_scopes(left):
+        left_prefix = _scope_prefix(left_scope)
+        if left_prefix is None:
+            continue
+        for right_scope in _writable_scopes(right):
+            right_prefix = _scope_prefix(right_scope)
+            if right_prefix is None:
+                continue
+            if (
+                left_prefix == right_prefix
+                or left_prefix.startswith(f"{right_prefix}/")
+                or right_prefix.startswith(f"{left_prefix}/")
+            ):
+                overlaps.append(f"{left_scope} <-> {right_scope}")
+    return overlaps
 
 
 def _utc_now() -> datetime:

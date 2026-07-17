@@ -113,6 +113,40 @@ def test_that_mode_mismatch_and_reserved_update_field_do_not_mutate_state() -> N
     assert state == before
 
 
+def test_that_required_worker_is_create_only_scheduler_authority() -> None:
+    state = _state()
+    task = _create_task("task")
+    task["required_worker"] = "role-r"
+    task["writable_files"] = ["docs/review.md"]
+    service = PublishService(now=_fixed_now, event_id_factory=_event_ids())
+
+    created = service.publish(
+        state,
+        envelope={
+            "input_schema_version": 1,
+            "project_id": "example",
+            "operation": "create",
+            "tasks": [task],
+        },
+        update=False,
+    )
+    forbidden = service.publish(
+        state,
+        envelope={
+            "input_schema_version": 1,
+            "project_id": "example",
+            "operation": "update",
+            "tasks": [{"task_id": "task", "patch": {"required_worker": "role-p"}}],
+        },
+        update=True,
+    )
+
+    assert created["ok"] is True
+    assert state["tasks"]["task"]["required_worker"] == "role-r"
+    assert state["tasks"]["task"]["writable_files"] == ["docs/review.md"]
+    assert forbidden["error"]["code"] == "INPUT_SCHEMA_INVALID"
+
+
 def _state() -> dict[str, object]:
     return {
         "schema_version": 1,

@@ -18,6 +18,16 @@ def test_that_core_delegates_a_lifecycle_claim_without_cli_parsing() -> None:
             }
         },
         "publish_history": [],
+        "staff_model": {
+            "staff": {
+                "window-a": {
+                    "can_execute_tasks": True,
+                    "allowed_agent_types": ["task_executor"],
+                    "allowed_task_kinds": ["unclassified"],
+                    "required_metadata_by_kind": {},
+                }
+            }
+        },
     }
     core = SchedulerCore()
 

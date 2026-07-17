@@ -8,7 +8,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Sequence
@@ -64,6 +64,11 @@ def _parser() -> argparse.ArgumentParser:
     input_source.add_argument("--stdin", action="store_true")
     input_source.add_argument("--json")
     publish.add_argument("--update", action="store_true")
+    staff_sync = commands.add_parser("staff-sync")
+    staff_source = staff_sync.add_mutually_exclusive_group(required=True)
+    staff_source.add_argument("--from-file", type=Path)
+    staff_source.add_argument("--stdin", action="store_true")
+    staff_source.add_argument("--json")
     migrate = commands.add_parser("migrate")
     mode = migrate.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true")
@@ -93,13 +98,17 @@ def _parser() -> argparse.ArgumentParser:
         command = commands.add_parser(name)
         command.add_argument("--task", required=True)
         command.add_argument("--worker", required=True)
+        if name in {"claim", "continue"}:
+            command.add_argument("--agent-id")
+        if name in {"heartbeat", "block", "fail", "complete", "retry"}:
+            command.add_argument("--lease-id", required=True)
         if name in {"block", "fail", "retry", "resume"}:
             command.add_argument("--reason", required=True)
         if name in {"retry", "resume"}:
             command.add_argument("--last-attempt-summary", required=True)
             command.add_argument("--next-attempt-instruction", required=True)
         if name == "complete":
-            command.add_argument("--summary")
+            command.add_argument("--summary", required=True)
     return parser
 
 
@@ -117,6 +126,8 @@ def _dispatch(args: argparse.Namespace, context: ProjectContext) -> dict[str, ob
             dry_run=args.check or args.dry_run,
         )
         return _normalize_migration_receipt(receipt)
+    if args.command == "staff-sync":
+        return _staff_sync(context, _read_json_input(args))
     if args.command == "review-correct":
         return _review_correct(context, args)
     return _lifecycle(args, context)
@@ -142,6 +153,7 @@ def _init(args: argparse.Namespace) -> dict[str, object]:
             "tasks": {},
             "publish_history": [],
             "review_decisions": [],
+            "staff_model": {"staff": {}},
         },
     )
     return {
@@ -154,6 +166,10 @@ def _init(args: argparse.Namespace) -> dict[str, object]:
 
 
 def _read_publish_envelope(args: argparse.Namespace) -> object:
+    return _read_json_input(args)
+
+
+def _read_json_input(args: argparse.Namespace) -> object:
     if args.from_file is not None:
         return json.loads(args.from_file.read_text(encoding="utf-8"))
     if args.stdin:
@@ -161,7 +177,81 @@ def _read_publish_envelope(args: argparse.Namespace) -> object:
     return json.loads(args.json)
 
 
-def _review_correct(context: ProjectContext, args: argparse.Namespace) -> dict[str, object]:
+def _staff_sync(context: ProjectContext, envelope: object) -> dict[str, object]:
+    workers = _validate_staff_envelope(envelope)
+    with StateLock(context.lock_path):
+        state = _load_state(context.state_path, context.project_id)
+        state["staff_model"] = {"staff": workers}
+        _atomic_write(context.state_path, state)
+    return {
+        "ok": True,
+        "operation": "staff_sync",
+        "workers": sorted(workers),
+    }
+
+
+def _validate_staff_envelope(envelope: object) -> dict[str, object]:
+    if (
+        not isinstance(envelope, Mapping)
+        or set(envelope) != {"input_schema_version", "workers"}
+        or envelope.get("input_schema_version") != 1
+        or not isinstance(envelope.get("workers"), Mapping)
+        or not envelope["workers"]
+    ):
+        raise ValueError("staff envelope must contain schema version 1 and workers")
+    workers: dict[str, object] = {}
+    for worker_id, raw_profile in envelope["workers"].items():
+        if not isinstance(worker_id, str) or not worker_id:
+            raise ValueError("worker ids must be non-empty strings")
+        workers[worker_id] = _validate_worker_profile(raw_profile)
+    return workers
+
+
+def _validate_worker_profile(profile: object) -> dict[str, object]:
+    fields = {
+        "can_execute_tasks",
+        "allowed_agent_types",
+        "allowed_task_kinds",
+        "required_metadata_by_kind",
+    }
+    if not isinstance(profile, Mapping) or set(profile) != fields:
+        raise ValueError("worker profile fields are invalid")
+    can_execute = profile["can_execute_tasks"]
+    agent_types = profile["allowed_agent_types"]
+    task_kinds = profile["allowed_task_kinds"]
+    requirements = profile["required_metadata_by_kind"]
+    if not isinstance(can_execute, bool):
+        raise ValueError("can_execute_tasks must be a boolean")
+    if not _string_list(agent_types) or not _string_list(task_kinds):
+        raise ValueError("allowed agent types and task kinds must be string arrays")
+    if not isinstance(requirements, Mapping) or any(
+        not isinstance(kind, str)
+        or not kind
+        or not _string_list(paths, allow_empty=True)
+        for kind, paths in requirements.items()
+    ):
+        raise ValueError("required metadata rules are invalid")
+    return {
+        "can_execute_tasks": can_execute,
+        "allowed_agent_types": list(agent_types),
+        "allowed_task_kinds": list(task_kinds),
+        "required_metadata_by_kind": {
+            str(kind): list(paths) for kind, paths in requirements.items()
+        },
+    }
+
+
+def _string_list(value: object, *, allow_empty: bool = False) -> bool:
+    return (
+        isinstance(value, list)
+        and (allow_empty or bool(value))
+        and all(isinstance(item, str) and bool(item) for item in value)
+    )
+
+
+def _review_correct(
+    context: ProjectContext, args: argparse.Namespace
+) -> dict[str, object]:
     with StateLock(context.lock_path):
         state = _load_state(context.state_path, context.project_id)
         tasks = state.get("tasks")
@@ -170,7 +260,9 @@ def _review_correct(context: ProjectContext, args: argparse.Namespace) -> dict[s
             return _failure("TASK_NOT_FOUND", "task was not found")
         terminal_status = task.get("status")
         if terminal_status not in {"done", "blocked", "failed"}:
-            return _failure("TASK_NOT_TERMINAL", "review correction requires a terminal task")
+            return _failure(
+                "TASK_NOT_TERMINAL", "review correction requires a terminal task"
+            )
         decisions = state.setdefault("review_decisions", [])
         if not isinstance(decisions, list):
             raise ValueError("review_decisions must be a list")
@@ -239,6 +331,10 @@ def _lifecycle(args: argparse.Namespace, context: ProjectContext) -> dict[str, o
             kwargs["task_id"] = args.task
         if hasattr(args, "worker"):
             kwargs["worker_id"] = args.worker
+        if hasattr(args, "agent_id"):
+            kwargs["agent_id"] = args.agent_id
+        if hasattr(args, "lease_id"):
+            kwargs["lease_id"] = args.lease_id
         if command in {"block", "fail", "retry", "resume"}:
             kwargs["reason"] = args.reason
         if command in {"retry", "resume"}:
@@ -318,11 +414,15 @@ def _load_state(path: Path, project_id: str) -> dict[str, object]:
             "project_id": project_id,
             "tasks": {},
             "publish_history": [],
+            "review_decisions": [],
+            "staff_model": {"staff": {}},
         }
     loaded = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(loaded, dict):
         raise ValueError("state must be an object")
     loaded.setdefault("publish_history", [])
+    loaded.setdefault("review_decisions", [])
+    loaded.setdefault("staff_model", {"staff": {}})
     return loaded
 
 

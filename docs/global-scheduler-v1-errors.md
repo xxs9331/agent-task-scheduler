@@ -18,3 +18,10 @@
 | `OBSERVATION_LOG_WARNING` | State committed but optional JSONL append failed | `ok: true`; state remains authoritative |
 
 Machine-readable failures contain `ok: false`, `error.code`, `error.message`, and `project` when resolution succeeded. CLI/envelope operation agreement is checked before task validation and lock acquisition. For example, `publish --update` with `operation: "create"`, or publish without `--update` with `operation: "update"`, returns `PUBLISH_OPERATION_MISMATCH` and changes no bytes. Batch validation is performed before opening the commit path. A successful publish with an observation-log failure contains `ok: true` and `warnings: [{"code":"OBSERVATION_LOG_WARNING","message":"state committed; observation log append failed","rebuild_from":"publish_history"}]`.
+
+Lifecycle authorization failures use stable `reason` values. The 0.2.0 security
+set includes `unknown_worker`, `staff_cannot_execute_tasks`,
+`required_worker_mismatch`, `agent_type_not_allowed`, `task_kind_not_allowed`,
+`required_metadata_missing`, `worker_already_leased`, `writable_path_locked`,
+`stale_lease`, `lease_expired`, and `summary_required`. These failures do not
+commit the rejected transition.
