@@ -58,6 +58,28 @@ def test_that_invalid_dependency_leaves_the_entire_create_batch_unchanged() -> N
     assert state == before
 
 
+def test_that_new_publish_without_team_mode_kind_is_rejected_atomically() -> None:
+    state = _state()
+    before = deepcopy(state)
+    task = _create_task("missing-kind")
+    task.pop("metadata")
+
+    receipt = PublishService().publish(
+        state,
+        envelope={
+            "input_schema_version": 1,
+            "project_id": "example",
+            "operation": "create",
+            "tasks": [task],
+        },
+        update=False,
+    )
+
+    assert receipt["ok"] is False
+    assert receipt["error"]["code"] == "INPUT_SCHEMA_INVALID"
+    assert state == before
+
+
 def test_that_update_is_whitelisted_and_recalculates_dependency_status() -> None:
     state = _state()
     state["tasks"] = {
@@ -166,6 +188,7 @@ def _create_task(
         "conflict_domain": "core",
         "preferred_worker": "worker",
         "worker_prompt": {},
+        "metadata": {"team_mode": {"kind": "implementation"}},
     }
 
 

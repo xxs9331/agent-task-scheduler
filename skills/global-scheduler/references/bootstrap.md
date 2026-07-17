@@ -17,3 +17,8 @@ worker policy, and apply it once with `staff-sync --stdin` before any `next` or
 reported as `unknown_worker`. The registry configures scheduler authority only;
 it does not start agents and does not replace Codex native subagents or project
 custom-agent TOML.
+
+From 0.2.1 onward, every newly published create task must include a non-empty
+`metadata.team_mode.kind`. Tasks already present before upgrade may remain
+unclassified for compatibility and should be reported by project audit tooling;
+do not republish new work without classification.

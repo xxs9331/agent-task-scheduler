@@ -18,7 +18,7 @@ Configuration, state, and publish input use independent integer versions: `confi
 
 ## Publish semantics
 
-`publish` accepts one strict envelope for both single-task and batch operations. The required `operation` discriminator is `create` or `update`; `oneOf` schema branches make the operation and item shape machine-checkable. `tasks` must be non-empty; a single task is an array of length one. `create` items contain task fields directly. `update` items contain `task_id` plus a `patch` object with only the documented mutable fields. Unknown fields and reserved runtime fields are rejected. The complete batch is validated before any write. Duplicate IDs, missing/self/cyclic dependencies, project mismatch, and invalid types fail atomically.
+`publish` accepts one strict envelope for both single-task and batch operations. The required `operation` discriminator is `create` or `update`; `oneOf` schema branches make the operation and item shape machine-checkable. `tasks` must be non-empty; a single task is an array of length one. Every new `create` item must contain a non-empty `metadata.team_mode.kind`; omission rejects the complete batch. Existing state loaded from an earlier version may omit kind and remains routable as `unclassified`, so compatibility cannot be used to publish a new unclassified task implicitly. `update` items contain `task_id` plus a `patch` object with only the documented mutable fields. Unknown fields and reserved runtime fields are rejected. The complete batch is validated before any write. Duplicate IDs, missing/self/cyclic dependencies, project mismatch, and invalid types fail atomically.
 
 Default publish rejects an existing task id. `publish --update` is a field-whitelist patch for existing `ready` or `blocked_waiting_dependency` tasks only. It cannot alter `task_id`, `required_worker`, `created_at`, `attempt`, owner, lease, terminal records, or history. `required_worker` and `writable_files` are create-time authority fields. No `--replace` exists in v1. Successful create/update appends `published`/`publish_updated` to state `publish_history`.
 
@@ -46,7 +46,8 @@ domain, and writable path overlap under the state lock.
 
 Every claim/continue returns a unique `lease_id`; active-attempt transitions must
 present it, so an old instance with the same worker id cannot mutate a new lease.
-`claim --agent-id ID` records the native Codex thread in lease metadata.
+`claim --agent-id ID` records caller-supplied correlation data in lease metadata;
+it is not runtime attestation that a Codex custom-agent TOML was loaded.
 `complete --summary` is mandatory and persists a completion receipt; block/fail
 persist terminal receipts. Parent agents must reconcile with `describe` after a
 child turn ends instead of treating child `Done` as scheduler completion.

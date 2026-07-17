@@ -6,6 +6,13 @@
 - Added a Codex custom marketplace catalog and verified repository metadata.
 - Documented the Skill workflow and bundled the reusable Chinese task-plan template.
 
+## 0.2.1 - 2026-07-17
+
+- Reject new publish/create items that omit a non-empty `metadata.team_mode.kind`.
+- Preserve `unclassified` routing only for tasks already present in project state.
+- Reject empty strings and empty collections for required claim metadata.
+- Clarify that caller-provided `--agent-id` is lease correlation data, not proof that Codex loaded a custom-agent TOML.
+
 ## 0.2.0 - 2026-07-17
 
 - Added an atomic scheduler worker registry and fail-closed claim authorization.

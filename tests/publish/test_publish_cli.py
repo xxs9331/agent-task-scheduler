@@ -37,6 +37,7 @@ def test_that_publish_cli_commits_a_create_envelope_to_the_resolved_project(
                         "conflict_domain": "core",
                         "preferred_worker": "worker",
                         "worker_prompt": {},
+                        "metadata": {"team_mode": {"kind": "implementation"}},
                     }
                 ],
             }
@@ -126,6 +127,33 @@ def test_that_publish_accepts_exactly_one_json_input_source(
     assert stdin_exit == json_exit == 0
     assert stdin_receipt["changed_task_ids"] == ["task-a"]
     assert json_receipt["changed_task_ids"] == ["task-a"]
+
+
+def test_that_publish_cli_rejects_new_task_without_team_mode_kind(
+    tmp_path: Path, capsys
+) -> None:
+    scheduler = _create_project(tmp_path, events_path=None)
+    envelope = _create_envelope()
+    tasks = envelope["tasks"]
+    assert isinstance(tasks, list)
+    task = tasks[0]
+    assert isinstance(task, dict)
+    task.pop("metadata")
+
+    exit_code = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "publish",
+            "--json",
+            json.dumps(envelope),
+        ]
+    )
+
+    receipt = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert receipt["error"]["code"] == "INPUT_SCHEMA_INVALID"
+    assert not (scheduler / "state.json").exists()
 
 
 def test_that_review_correction_preserves_terminal_summary_and_appends_superseding_facts(
@@ -453,6 +481,7 @@ def _create_envelope() -> dict[str, object]:
                 "conflict_domain": "core",
                 "preferred_worker": "worker",
                 "worker_prompt": {},
+                "metadata": {"team_mode": {"kind": "implementation"}},
             }
         ],
     }

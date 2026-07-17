@@ -87,3 +87,9 @@ before `next` or `claim`. Each successful claim returns a unique `lease_id`;
 heartbeat and active-attempt terminal commands must return that token.
 Completion requires `--summary` and stores a durable receipt so a parent agent
 can reconcile scheduler state after a native Codex child turn ends.
+
+Version 0.2.1 requires every newly published create task to contain a non-empty
+`metadata.team_mode.kind`; the complete batch is rejected otherwise. Only tasks
+already present before the upgrade may continue to route as `unclassified`.
+Caller-provided `--agent-id` is correlation metadata, not proof that Codex loaded
+a custom-agent TOML.

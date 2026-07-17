@@ -33,9 +33,14 @@ Skill 和 Python CLI，并将每个项目的配置、状态、锁、发布历史
 Skill 明确禁止跨项目复用状态、直接编辑状态
 JSON、静默迁移 legacy 数据，以及在等待 gate 时长期占用任务 lease。
 
+0.2.1 明确新旧边界：新 `publish` 的每个 create task 必须包含非空的
+`metadata.team_mode.kind`，否则整批原子拒绝；升级前已存在且缺少 kind 的任务仍按
+`unclassified` 兼容，由项目审计工具告警。
+
 从 0.2.0 起，`claim` 返回唯一 `lease_id`；`heartbeat`、`complete`、`block`、`fail`
 和 `retry` 必须回传该 token。`complete --summary` 为必填，父代理应在子线程结束后重新
 `describe`，只把持久 `done`、summary、receipt 和任务验证证据同时成立视为完成。
+`--agent-id` 只是调用者写入 lease 的关联字段，不证明 Codex 已加载 custom-agent TOML。
 
 复杂任务拆分可以从随插件安装的
 [《任务计划书模板》](skills/global-scheduler/assets/任务计划书模板.md)开始。模板包含调研、

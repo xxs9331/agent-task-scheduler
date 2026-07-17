@@ -11,7 +11,7 @@ def test_that_plugin_manifest_points_to_discoverable_skills() -> None:
     manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text())
 
     assert manifest["name"] == "global-scheduler"
-    assert manifest["version"] == "0.2.0"
+    assert manifest["version"] == "0.2.1"
     assert manifest["skills"] == "./skills/"
     assert (ROOT / manifest["skills"] / "global-scheduler" / "SKILL.md").is_file()
     assert manifest["interface"]["capabilities"] == ["Interactive", "Read", "Write"]

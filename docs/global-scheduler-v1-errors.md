@@ -24,4 +24,6 @@ set includes `unknown_worker`, `staff_cannot_execute_tasks`,
 `required_worker_mismatch`, `agent_type_not_allowed`, `task_kind_not_allowed`,
 `required_metadata_missing`, `worker_already_leased`, `writable_path_locked`,
 `stale_lease`, `lease_expired`, and `summary_required`. These failures do not
-commit the rejected transition.
+commit the rejected transition. Whitespace-only strings and empty collections
+are treated as missing; scheduler validation does not independently prove that
+human authorization text is truthful.

@@ -21,6 +21,10 @@ Use `next`, then `claim`, then `describe`; record the returned `lease_id`, follo
 
 `heartbeat`, `complete`, `retry`, `block`, and `fail` require `--lease-id`. Completion also requires a non-empty `--summary`. A child-agent turn ending is not task completion: the parent re-runs `describe` and verifies `status=done`, summary, completion receipt, and task evidence before reporting success. A child ending while the task remains `running` is an early exit/orphan candidate, not success.
 
+Every newly published create task must include a non-empty
+`metadata.team_mode.kind`. `unclassified` is only a compatibility interpretation
+for tasks already present in state; never omit classification from new work.
+
 If syntax is uncertain, run that subcommand's `--help`. Help is runtime syntax truth; references define state, atomicity, and safety. If help and a reference disagree, stop and report the installed version and conflict.
 
 ## Load references only when needed

@@ -32,6 +32,7 @@ _REQUIRED_CREATE_FIELDS = {
     "conflict_domain",
     "preferred_worker",
     "worker_prompt",
+    "metadata",
 }
 _UPDATE_FIELDS = _CREATE_FIELDS - {"task_id", "required_worker"}
 _UPDATABLE_STATUSES = {"ready", "blocked_waiting_dependency"}
@@ -273,10 +274,24 @@ def _valid_task_fields(task: Mapping[str, object], *, partial: bool = False) -> 
         or not all(isinstance(value, str) and value for value in task["writable_files"])
     ):
         return False
-    return all(
+    valid_mappings = all(
         not isinstance(task.get(field), bool) and isinstance(task.get(field), Mapping)
         for field in ("worker_prompt", "metadata")
         if field in task
+    )
+    return valid_mappings and (
+        "metadata" not in task or _valid_team_mode_metadata(task["metadata"])
+    )
+
+
+def _valid_team_mode_metadata(value: object) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    team_mode = value.get("team_mode")
+    return (
+        isinstance(team_mode, Mapping)
+        and isinstance(team_mode.get("kind"), str)
+        and bool(str(team_mode["kind"]).strip())
     )
 
 

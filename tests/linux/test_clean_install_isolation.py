@@ -139,6 +139,7 @@ def _write_envelope(root: Path, *, project_id: str, task_id: str) -> Path:
                         "conflict_domain": "linux-validation",
                         "preferred_worker": "worker",
                         "worker_prompt": {},
+                        "metadata": {"team_mode": {"kind": "unclassified"}},
                     }
                 ],
             }

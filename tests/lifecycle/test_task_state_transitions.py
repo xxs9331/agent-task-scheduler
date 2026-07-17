@@ -157,6 +157,12 @@ def test_that_claim_rechecks_required_worker_agent_type_kind_and_fallback_metada
     wrong_worker = service.claim(state, task_id="task-a", worker_id="window-a")
     missing_metadata = service.claim(state, task_id="task-a", worker_id="role-p")
     task["metadata"]["fallback_authorization"] = {
+        "original_task_id": "",
+        "user_authorization": "   ",
+        "return_gate_task_id": [],
+    }
+    empty_metadata = service.claim(state, task_id="task-a", worker_id="role-p")
+    task["metadata"]["fallback_authorization"] = {
         "original_task_id": "original",
         "user_authorization": "approved",
         "return_gate_task_id": "gate",
@@ -175,6 +181,7 @@ def test_that_claim_rechecks_required_worker_agent_type_kind_and_fallback_metada
             "fallback_authorization.return_gate_task_id",
         ],
     }
+    assert empty_metadata == missing_metadata
     assert accepted["ok"] is True
 
 

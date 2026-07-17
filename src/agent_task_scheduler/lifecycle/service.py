@@ -642,7 +642,8 @@ class LifecycleService:
         missing = [
             path
             for path in required_paths
-            if isinstance(path, str) and _metadata_value(task, path) is None
+            if isinstance(path, str)
+            and not _meaningful_metadata_value(_metadata_value(task, path))
         ]
         if missing:
             return {
@@ -751,6 +752,18 @@ def _metadata_value(task: Task, path: str) -> object | None:
             return None
         value = value[part]
     return value
+
+
+def _meaningful_metadata_value(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    if isinstance(value, bool):
+        return value
+    return True
 
 
 def _writable_scopes(task: Task) -> list[str]:
