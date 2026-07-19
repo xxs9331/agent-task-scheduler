@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import io
+import zipfile
 from pathlib import Path
 
 
@@ -11,9 +13,9 @@ def test_that_plugin_manifest_points_to_discoverable_skills() -> None:
     manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text())
 
     assert manifest["name"] == "global-scheduler"
-    assert manifest["version"] == "0.3.5"
+    assert manifest["version"] == "0.3.6"
     assert manifest["skills"] == "./skills/"
-    assert (ROOT / manifest["skills"] / "global-scheduler" / "SKILL.md").is_file()
+    assert (ROOT / manifest["skills"] / "codex-team" / "SKILL.md").is_file()
     assert manifest["interface"]["capabilities"] == ["Interactive", "Read", "Write"]
     assert manifest["repository"] == "https://github.com/xxs9331/agent-task-scheduler"
 
@@ -31,11 +33,11 @@ def test_that_marketplace_catalog_resolves_the_root_plugin() -> None:
 
 
 def test_that_skill_frontmatter_declares_name_and_trigger_description() -> None:
-    skill = (ROOT / "skills" / "global-scheduler" / "SKILL.md").read_text()
+    skill = (ROOT / "skills" / "codex-team" / "SKILL.md").read_text()
 
     assert skill.startswith("---\n")
-    assert 'name: "global-scheduler"' in skill
-    assert 'description: "Use for project-scoped scheduler' in skill
+    assert 'name: "codex-team"' in skill
+    assert "codex team" in skill.lower()
 
 
 def test_that_plugin_policy_and_progressive_references_exist() -> None:
@@ -44,12 +46,12 @@ def test_that_plugin_policy_and_progressive_references_exist() -> None:
         "CHANGELOG.md",
         "SECURITY.md",
         "PRIVACY.md",
-        "skills/global-scheduler/references/contract.md",
-        "skills/global-scheduler/references/errors.md",
-        "skills/global-scheduler/references/bootstrap.md",
-        "skills/global-scheduler/references/platform.md",
-        "skills/global-scheduler/references/migration.md",
-        "skills/global-scheduler/assets/任务计划书模板.md",
+        "skills/codex-team/references/contract.md",
+        "skills/codex-team/references/errors.md",
+        "skills/codex-team/references/bootstrap.md",
+        "skills/codex-team/references/platform.md",
+        "skills/codex-team/references/migration.md",
+        "skills/codex-team/assets/任务计划书模板.md",
     ):
         assert (ROOT / path).is_file(), path
 
@@ -58,24 +60,51 @@ def test_that_wheel_configuration_includes_the_portable_skill_assets() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text()
 
     assert (
-        '"skills/global-scheduler" = "agent_task_scheduler/codex_team/assets/global-scheduler"'
+        '"skills/codex-team" = "agent_task_scheduler/codex_team/assets/codex-team"'
         in pyproject
     )
 
 
 def test_that_skill_bundles_the_relative_user_command_installer() -> None:
-    skill = ROOT / "skills" / "global-scheduler"
+    skill = ROOT / "skills" / "codex-team"
 
     assert (skill / "scripts" / "install_codex_team.py").is_file()
-    assert (skill / "assets" / "agent_task_scheduler-0.3.5-py3-none-any.whl").is_file()
+    assert (skill / "assets" / "agent_task_scheduler-0.3.6-py3-none-any.whl").is_file()
+
+
+def test_that_launcher_wheel_contains_one_non_recursive_core_wheel() -> None:
+    launcher = (
+        ROOT
+        / "skills"
+        / "codex-team"
+        / "assets"
+        / "agent_task_scheduler-0.3.6-py3-none-any.whl"
+    )
+    nested_path = (
+        "agent_task_scheduler/codex_team/assets/codex-team/assets/"
+        "agent_task_scheduler-0.3.6-py3-none-any.whl"
+    )
+    with zipfile.ZipFile(launcher) as archive:
+        assert nested_path in archive.namelist()
+        skill = archive.read(
+            "agent_task_scheduler/codex_team/assets/codex-team/SKILL.md"
+        ).decode("utf-8")
+        nested = archive.read(nested_path)
+    assert "Parlant" not in skill
+    with zipfile.ZipFile(io.BytesIO(nested)) as core:
+        assert not any(name.endswith(".whl") for name in core.namelist())
+        nested_skill = core.read(
+            "agent_task_scheduler/codex_team/assets/codex-team/SKILL.md"
+        ).decode("utf-8")
+    assert "Parlant" not in nested_skill
 
 
 def test_that_readmes_explain_the_skill_and_link_the_task_plan_template() -> None:
     for readme_name in ("README.md", "README_EN.md"):
         readme = (ROOT / readme_name).read_text()
 
-        assert "global-scheduler" in readme
-        assert "skills/global-scheduler/assets/任务计划书模板.md" in readme
+        assert "codex-team" in readme
+        assert "skills/codex-team/assets/任务计划书模板.md" in readme
 
 
 def test_that_skill_eval_cases_include_positive_and_negative_triggers() -> None:

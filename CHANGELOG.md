@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 0.3.6
+
+- Merged generic Codex Team startup, native role attestation, thread continuity,
+  and parent reconciliation guidance into the core Skill.
+- Renamed the project-installed Skill to `codex-team` while retaining
+  `global-scheduler` as the marketplace installation compatibility name.
+- Documented transactional migration to `.agents/skills/codex-team`, including
+  removal of legacy `global-scheduler`, `codex-team-staff`, and
+  `parlant-staff-shorthand` project Skills after successful validation.
+
 ### 0.3.5
 
 - Made the bundled 0.3.5 team configuration and Skill the single canonical

@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[2]
-SKILL_SOURCE = ROOT / "skills" / "global-scheduler"
+SKILL_SOURCE = ROOT / "skills" / "codex-team"
 
 
 def test_that_user_launcher_paths_follow_the_supported_platform_conventions() -> None:
@@ -35,7 +35,7 @@ def test_that_user_launcher_paths_follow_the_supported_platform_conventions() ->
 def test_that_clean_skill_copy_installs_portable_command_to_an_isolated_prefix(
     tmp_path: Path,
 ) -> None:
-    skill_root = tmp_path / "clean plugin" / "skills" / "global-scheduler"
+    skill_root = tmp_path / "clean plugin" / "skills" / "codex-team"
     shutil.copytree(SKILL_SOURCE, skill_root)
     prefix = tmp_path / "user prefix"
     home = tmp_path / "temporary home"
@@ -108,9 +108,7 @@ def test_that_installer_is_idempotent_but_refuses_to_overwrite_an_unmanaged_comm
     tmp_path: Path,
 ) -> None:
     prefix = tmp_path / "prefix"
-    installer = (
-        ROOT / "skills" / "global-scheduler" / "scripts" / "install_codex_team.py"
-    )
+    installer = ROOT / "skills" / "codex-team" / "scripts" / "install_codex_team.py"
     command = prefix / "bin" / "codex-team"
 
     first = subprocess.run(
@@ -154,7 +152,7 @@ def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis(
         content = path.read_text(encoding="utf-8")
         assert "install_codex_team.py" in content
         assert "type -a codex-team" in content
-        assert "0.3.5" in content
+        assert "0.3.6" in content
 
 
 def test_that_doctor_and_start_do_not_treat_static_features_as_native_attestation() -> (

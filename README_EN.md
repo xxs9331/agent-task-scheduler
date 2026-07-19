@@ -1,8 +1,8 @@
-# Global Scheduler
+# Codex Team
 
 English | [中文](README.md)
 
-Global Scheduler is a project-scoped Codex plugin containing a self-bootstrapping
+Codex Team is a generic team and project-scoped Codex plugin containing a self-bootstrapping
 Skill and a Python scheduler CLI. It keeps configuration, state, locks, publish
 history, and optional observation logs isolated inside each project.
 
@@ -12,7 +12,7 @@ history, and optional observation logs isolated inside each project.
 - Publish tasks and claim them through atomic worker authorization and fenced leases.
 - Diagnose routing, expired leases, migration, and compatibility issues.
 - Isolate scheduler state, history, and locks between projects.
-- Use `codex-team` to initialize, diagnose, and start a fresh generic team in any project.
+- Use `codex-team` to initialize, diagnose, and start a fresh generic team, with native role attestation, continuity, and reconciliation.
 
 ## Portable Codex Team
 
@@ -21,7 +21,7 @@ does not—and must not claim to—have a post-install hook. Restart Codex, then
 it in any project to “install codex-team and bootstrap team mode.” The Skill runs
 its own relative `scripts/install_codex_team.py`; the user never needs to clone
 this repository, copy files, or discover a plugin-cache path. The installer uses
-the bundled 0.3.5 wheel to create a private user environment and managed launcher,
+the bundled 0.3.6 wheel to create a private user environment and managed launcher,
 emits a JSON receipt, and never edits PATH, shell profiles, or plugin files. If
 the receipt says the bin directory is absent from PATH, apply its one-time hint in
 the current shell. After installation, run `type -a codex-team`; if an old shell
@@ -36,7 +36,10 @@ self-report parent-only fields; missing parent evidence still fails closed.
 Every project uses the one latest team configuration and Skill bundled with
 `codex-team`. `doctor` requires the managed configuration to be semantically
 identical to the current template. `init` transactionally upgrades a differing
-older configuration and Skill to 0.3.5. Bare `codex-team`/`start` performs this
+older configuration and Skill to 0.3.6. After a successful transactional upgrade,
+the project keeps exactly `.agents/skills/codex-team` and removes legacy
+`.agents/skills/global-scheduler`, `.agents/skills/codex-team-staff`, and
+`.agents/skills/parlant-staff-shorthand`. Bare `codex-team`/`start` performs this
 upgrade before launching Codex; a failed upgrade rolls back the managed files
 and never invokes Codex.
 
@@ -67,7 +70,7 @@ ids `role-a...role-r`.
 
 ## What the Skill does
 
-The `global-scheduler` Skill is the reusable operating guide Codex follows when
+The Codex Team Skill is the reusable operating guide Codex follows when
 using the scheduler. It stores no task data and does not replace the Scheduler
 CLI. Instead, it makes Codex invoke the CLI within the correct project boundary
 and follow the contracts for bootstrap, publish, claim, heartbeat, completion,
@@ -82,11 +85,14 @@ JSON receipt.
 The Skill prohibits cross-project state reuse, direct state-JSON edits, silent
 legacy migration, and holding a task lease while waiting for a gate. For complex
 work breakdowns, start with the bundled Chinese
-[task-plan template](skills/global-scheduler/assets/任务计划书模板.md), which covers
+[task-plan template](skills/codex-team/assets/任务计划书模板.md), which covers
 research, execution batches, parallel nodes, R gates, task merging, and final
 acceptance.
 
 ## Install from a custom Codex marketplace
+
+The plugin installation name remains `global-scheduler` for compatibility; the
+displayed and project-installed core Skill is Codex Team.
 
 ```bash
 codex plugin marketplace add xxs9331/agent-task-scheduler --ref main
@@ -96,7 +102,7 @@ codex plugin add global-scheduler@xxs9331-scheduler
 Restart Codex, open the target project, and ask:
 
 ```text
-Use global-scheduler to initialize this project.
+Use Codex Team to initialize this project.
 ```
 
 The Skill installs its bundled wheel, creates canonical project configuration,
@@ -112,27 +118,27 @@ Codex environment do not need separate installations.
 
 ```bash
 mkdir -p .agents/skills
-cp -R /path/to/agent-task-scheduler/skills/global-scheduler .agents/skills/
+cp -R /path/to/agent-task-scheduler/skills/codex-team .agents/skills/codex-team
 ```
 
 ## Repository contents
 
 - `.agents/plugins/marketplace.json`: Codex custom marketplace catalog.
 - `.codex-plugin/plugin.json`: plugin discovery and display metadata.
-- `skills/global-scheduler/SKILL.md`: trigger rules and operational workflow.
-- `skills/global-scheduler/scripts/install.py`: offline project bootstrap.
-- `skills/global-scheduler/scripts/install_codex_team.py`: one-time safe user
+- `skills/codex-team/SKILL.md`: team startup, role identity, and scheduler workflow.
+- `skills/codex-team/scripts/install.py`: offline project bootstrap.
+- `skills/codex-team/scripts/install_codex_team.py`: one-time safe user
   command installer backed by the bundled wheel.
-- `skills/global-scheduler/assets/`: bundled, verified wheel.
-- `skills/global-scheduler/assets/任务计划书模板.md`: reusable Chinese task-plan template.
-- `skills/global-scheduler/references/`: contracts, errors, migration, and platform boundaries.
+- `skills/codex-team/assets/`: bundled, verified wheel.
+- `skills/codex-team/assets/任务计划书模板.md`: reusable Chinese task-plan template.
+- `skills/codex-team/references/`: contracts, errors, migration, and platform boundaries.
 - `tests/` and `evals/`: implementation, infrastructure, and trigger cases.
 
 ## Validation
 
 ```bash
 uv run --group test pytest -q
-uv run --with ruff ruff check src tests skills/global-scheduler/scripts
+uv run --with ruff ruff check src tests skills/codex-team/scripts
 ```
 
 See `SECURITY.md`, `PRIVACY.md`, and `CHANGELOG.md` for operational boundaries

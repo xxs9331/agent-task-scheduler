@@ -28,23 +28,30 @@ _MODELS = {
     "window_c": ("gpt-5.6-luna", "medium"),
     "window_d": ("gpt-5.6-luna", "medium"),
 }
-_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.5-py3-none-any.whl"
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.6-py3-none-any.whl"
 _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     {
         "agent_task_scheduler-0.3.1-py3-none-any.whl",
         "agent_task_scheduler-0.3.2-py3-none-any.whl",
         "agent_task_scheduler-0.3.3-py3-none-any.whl",
         "agent_task_scheduler-0.3.4-py3-none-any.whl",
+        "agent_task_scheduler-0.3.5-py3-none-any.whl",
     }
 )
 _SUPPORTED_SKILL_WHEELS = {
-    _BUNDLED_WHEEL_NAME: "0.3.5",
+    _BUNDLED_WHEEL_NAME: "0.3.6",
     **{wheel: wheel.split("-")[1] for wheel in _SUPPORTED_LEGACY_WHEEL_NAMES},
 }
 _REQUIRED_SKILL_FILES = (
     "SKILL.md",
     "scripts/install.py",
     "scripts/install_codex_team.py",
+)
+_SKILL_NAME = "codex-team"
+_LEGACY_SKILL_NAMES = (
+    "codex-team-staff",
+    "global-scheduler",
+    "parlant-staff-shorthand",
 )
 _NATIVE_ATTESTATION_NOTE = (
     "Static multi_agent feature status is not native custom-agent attestation. "
@@ -151,15 +158,20 @@ def _init(root: Path) -> dict[str, object]:
     if scheduler_conflict is not None:
         return scheduler_conflict
     expected = _expected_files()
-    skill_target = root / ".agents" / "skills" / "global-scheduler"
-    skill_existed = skill_target.exists()
+    skills_root = root / ".agents" / "skills"
+    skill_target = skills_root / _SKILL_NAME
+    legacy_skills = [skills_root / name for name in _LEGACY_SKILL_NAMES]
+    existing_legacy_skills = [path for path in legacy_skills if path.exists()]
+    skill_existed = skill_target.exists() or bool(existing_legacy_skills)
     skill_status, skill_wheel = _skill_status(skill_target)
     backup = skill_target.with_name(f"{skill_target.name}.backup")
-    if skill_status != "current" and backup.exists():
+    legacy_backups = [path.with_name(f"{path.name}.backup") for path in legacy_skills]
+    conflicting_backups = [path for path in (backup, *legacy_backups) if path.exists()]
+    if conflicting_backups:
         return _failure(
             "CODEX_TEAM_CONFLICT",
             "manual backup handling required",
-            [str(backup.relative_to(root))],
+            [str(path.relative_to(root)) for path in conflicting_backups],
         )
     managed_roots_existed = {
         relative: (root / relative).exists()
@@ -168,8 +180,15 @@ def _init(root: Path) -> dict[str, object]:
     original_files: dict[Path, bytes | None] = {}
     created: list[str] = []
     updated: list[str] = []
+    version_source = skill_target
+    version_wheel = skill_wheel
+    if not skill_target.exists():
+        scheduler_legacy = skills_root / "global-scheduler"
+        if scheduler_legacy.exists():
+            version_source = scheduler_legacy
+            _, version_wheel = _skill_status(scheduler_legacy)
     upgraded_from = (
-        _detected_skill_version(skill_target, skill_wheel)
+        _detected_skill_version(version_source, version_wheel)
         if skill_status != "current" and skill_existed
         else None
     )
@@ -188,7 +207,14 @@ def _init(root: Path) -> dict[str, object]:
         if replaced_skill:
             if skill_target.exists():
                 skill_target.rename(backup)
+            for legacy, legacy_backup in zip(legacy_skills, legacy_backups):
+                if legacy.exists():
+                    legacy.rename(legacy_backup)
             shutil.copytree(_skill_source(), skill_target)
+        else:
+            for legacy, legacy_backup in zip(legacy_skills, legacy_backups):
+                if legacy.exists():
+                    legacy.rename(legacy_backup)
         installer = skill_target / "scripts" / "install.py"
         installer_command = [
             sys.executable,
@@ -212,6 +238,8 @@ def _init(root: Path) -> dict[str, object]:
             root=root,
             skill_target=skill_target,
             backup=backup,
+            legacy_skills=legacy_skills,
+            legacy_backups=legacy_backups,
             replaced_skill=replaced_skill,
             original_files=original_files,
             managed_roots_existed=managed_roots_existed,
@@ -225,13 +253,19 @@ def _init(root: Path) -> dict[str, object]:
         return receipt
     if backup.exists():
         shutil.rmtree(backup)
-    upgraded_to = "0.3.5" if replaced_skill and skill_existed else None
+    for legacy_backup in legacy_backups:
+        if legacy_backup.exists():
+            shutil.rmtree(legacy_backup)
+    upgraded_to = "0.3.6" if skill_existed and replaced_skill else None
     return {
         "ok": True,
         "operation": "init",
         "project_root": str(root),
         "created": sorted(created),
         "updated": sorted(updated),
+        "removed_legacy_skills": sorted(
+            str(path.relative_to(root)) for path in existing_legacy_skills
+        ),
         "upgraded_from": upgraded_from,
         "upgraded_to": upgraded_to,
         "migration": {
@@ -254,10 +288,14 @@ def _doctor(root: Path) -> dict[str, object]:
     ]
     if not (root / ".scheduler" / "project.json").is_file():
         missing.append(".scheduler/project.json")
-    skill_root = root / ".agents" / "skills" / "global-scheduler"
+    skill_root = root / ".agents" / "skills" / _SKILL_NAME
     skill_status, skill_wheel = _skill_status(skill_root)
     if skill_status != "current":
-        missing.append(".agents/skills/global-scheduler/SKILL.md")
+        missing.append(f".agents/skills/{_SKILL_NAME}/SKILL.md")
+    for legacy_name in _LEGACY_SKILL_NAMES:
+        legacy_path = root / ".agents" / "skills" / legacy_name
+        if legacy_path.exists():
+            missing.append(str(legacy_path.relative_to(root)))
     if (
         not (root / ".venv" / "bin" / "scheduler").is_file()
         and not (root / ".venv" / "Scripts" / "scheduler.exe").is_file()
@@ -296,7 +334,7 @@ def _start(root: Path, *, role: str | None) -> int:
             "codex-team init/doctor/start, codex resume, or launch nested Codex. "
             "Read only the existing project handoff (.codex/team-handoff.md or "
             ".codex/TEAM_MODE_V2_PM_HANDOFF.md), CLAUDE.md, AGENTS.md, and "
-            "global-scheduler Skill, then directly native-spawn product_manager with "
+            "unified codex-team Skill, then directly native-spawn product_manager with "
             "fork_turns=none. Create a new agent each time. "
             + _PARENT_ATTESTATION_PROTOCOL
         )
@@ -306,7 +344,7 @@ def _start(root: Path, *, role: str | None) -> int:
         prompt = (
             f"Start a fresh {role} session as native {agent}; worker_id={worker}; "
             "fork_turns=none. Read this project's handoff, CLAUDE.md, AGENTS.md, and "
-            "global-scheduler Skill. Create a new agent each time."
+            "unified codex-team Skill. Create a new agent each time."
         )
         command = ["codex", "-C", str(root), prompt]
     try:
@@ -330,7 +368,6 @@ def _expected_files() -> dict[str, str]:
     files = {
         ".codex/config.toml": 'model = "gpt-5.6-luna"\nmodel_reasoning_effort = "medium"\n\n[agents]\nmax_threads = 6\nmax_depth = 2\ninterrupt_message = true\n',
         ".codex/team-handoff.md": "# Codex Team Handoff\n\nThis project uses the portable project-local Codex team topology.\n",
-        ".agents/skills/codex-team-staff/SKILL.md": '---\nname: "codex-team-staff"\ndescription: "Use for portable Codex team startup and role handoff."\n---\n\nUse only this project\'s files and scheduler state.\n',
     }
     for agent in sorted(_AGENTS):
         files[f".codex/agents/{agent}.toml"] = _agent_toml(agent)
@@ -338,10 +375,10 @@ def _expected_files() -> dict[str, str]:
 
 
 def _skill_source() -> Path:
-    packaged = Path(__file__).parent / "assets" / "global-scheduler"
+    packaged = Path(__file__).parent / "assets" / _SKILL_NAME
     if packaged.is_dir():
         return packaged
-    return Path(__file__).parents[3] / "skills" / "global-scheduler"
+    return Path(__file__).parents[3] / "skills" / _SKILL_NAME
 
 
 def _skill_status(skill_root: Path) -> tuple[str, str | None]:
@@ -363,7 +400,7 @@ def _skill_status(skill_root: Path) -> tuple[str, str | None]:
             )
         except (OSError, json.JSONDecodeError):
             return "invalid", wheel_name
-        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.5":
+        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.6":
             return "invalid", wheel_name
         source = _skill_source().resolve()
         if skill_root.resolve() != source and not _same_skill_tree(skill_root, source):
@@ -420,6 +457,8 @@ def _rollback_migration(
     root: Path,
     skill_target: Path,
     backup: Path,
+    legacy_skills: list[Path],
+    legacy_backups: list[Path],
     replaced_skill: bool,
     original_files: dict[Path, bytes | None],
     managed_roots_existed: dict[str, bool],
@@ -428,6 +467,9 @@ def _rollback_migration(
         shutil.rmtree(skill_target)
     if backup.exists():
         backup.rename(skill_target)
+    for legacy, legacy_backup in zip(legacy_skills, legacy_backups):
+        if legacy_backup.exists():
+            legacy_backup.rename(legacy)
     _restore_files(original_files)
     for relative in (".venv", ".scheduler", ".codex", ".agents"):
         path = root / relative
@@ -467,7 +509,7 @@ def _agent_toml(agent: str) -> str:
         f'model_reasoning_effort = "{effort}"\n\n'
         'developer_instructions = """\n'
         f"You are {role} for the current project. worker_id={worker}.\n"
-        "Read this project handoff, CLAUDE.md, AGENTS.md, this TOML, and the global-scheduler Skill.\n"
+        "Read this project handoff, CLAUDE.md, AGENTS.md, this TOML, and the unified codex-team Skill.\n"
         "Use only the current project. Prompt text is not runtime identity attestation.\n"
         f"{_responsibilities(agent)}\n"
         '"""\n'

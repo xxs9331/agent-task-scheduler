@@ -1,7 +1,7 @@
 {
   "name": "xxs9331-scheduler",
   "interface": {
-    "displayName": "XXS9331 Scheduler Plugins"
+    "displayName": "XXS9331 Codex Team Plugins"
   },
   "plugins": [
     {

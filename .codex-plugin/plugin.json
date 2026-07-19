@@ -1,7 +1,7 @@
 {
   "name": "global-scheduler",
-  "version": "0.3.5",
-  "description": "Project-scoped task scheduler workflows, offline bootstrap, lifecycle operations, publish, migration diagnostics, and recovery guidance.",
+  "version": "0.3.6",
+  "description": "Codex Team workflows with project-scoped scheduler lifecycle, offline bootstrap, native role attestation, continuity, reconciliation, and recovery guidance.",
   "author": {
     "name": "xxs9331"
   },
@@ -18,9 +18,9 @@
   "skills": "./skills/",
   "hooks": {},
   "interface": {
-    "displayName": "Global Scheduler",
-    "shortDescription": "Initialize and operate isolated project task schedulers",
-    "longDescription": "Bootstrap a project-local scheduler without network access, publish and route tasks, manage lifecycle transitions, diagnose blocked work, and perform guarded migration checks.",
+    "displayName": "Codex Team",
+    "shortDescription": "Bootstrap Codex Team and operate its isolated project scheduler",
+    "longDescription": "Bootstrap a generic Codex team without network access, attest native roles, preserve thread continuity, reconcile work, and publish and route tasks through the project-local scheduler.",
     "developerName": "xxs9331",
     "websiteURL": "https://github.com/xxs9331/agent-task-scheduler",
     "privacyPolicyURL": "https://github.com/xxs9331/agent-task-scheduler/blob/main/PRIVACY.md",
@@ -31,7 +31,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Initialize global scheduler in this project.",
+      "Initialize Codex Team in this project.",
       "Publish and route this project's scheduler tasks."
     ],
     "brandColor": "#2563EB",
