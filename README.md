@@ -19,9 +19,13 @@ Skill 和 Python CLI，并将每个项目的配置、状态、锁、发布历史
 跨电脑首次使用只需要安装本插件；插件本身没有也不声称存在 post-install hook。重启
 Codex 后，在任意项目中对它说“安装 codex-team 并初始化团队模式”。Skill 会从自己的
 相对 `scripts/install_codex_team.py` 运行内置安装器，无需 clone、复制文件或定位插件
-缓存。安装器仅用内置 0.3.1 wheel 创建用户级隔离环境和受管理的 launcher，输出 JSON
+缓存。安装器仅用内置 0.3.2 wheel 创建用户级隔离环境和受管理的 launcher，输出 JSON
 receipt；它绝不改写 PATH、bashrc 或 PowerShell profile。若 receipt 提示 bin 不在 PATH，
-只在当前 shell 执行其一次性提示即可。
+只在当前 shell 执行其一次性提示即可。安装后先运行 `type -a codex-team`：若受管理的
+launcher 前出现旧 shell function 或 alias，请在当前 shell unset，并手动删除 shell profile
+里的旧 block；安装器绝不会改写 profile。静态 `multi_agent` feature 状态不能证明 native
+custom-agent runtime attestation；缺少 agent_type、agent/thread id、effective model 或 reasoning
+effort 时必须 fail closed。
 
 然后在目标项目目录运行：
 

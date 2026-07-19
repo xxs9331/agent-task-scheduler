@@ -31,6 +31,26 @@ def test_that_start_uses_the_current_project_without_a_parlant_fallback(
     assert "fork_turns=none" in arguments
 
 
+def test_that_fresh_root_prompt_forbids_recursive_launcher_commands(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "fresh root"
+    _install_fake_codex(tmp_path, monkeypatch)
+
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    assert main(["start", str(project)]) == 0
+
+    prompt = json.loads((tmp_path / "codex-arguments.json").read_text())[-1]
+    assert "YOU ARE ALREADY THE FRESH TEAM ROOT" in prompt
+    assert "do not call codex-team" in prompt
+    assert "codex-team init/doctor/start" in prompt
+    assert "codex resume" in prompt
+    assert "nested Codex" in prompt
+    assert "product_manager" in prompt
+    assert "fork_turns=none" in prompt
+
+
 def test_that_a_bare_project_path_starts_the_resolved_project(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:

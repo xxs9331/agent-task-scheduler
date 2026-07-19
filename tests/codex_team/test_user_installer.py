@@ -70,6 +70,8 @@ def test_that_clean_skill_copy_installs_portable_command_to_an_isolated_prefix(
     command = prefix / "bin" / "codex-team"
     assert receipt["ok"] is True
     assert receipt["command"] == str(command)
+    assert receipt["shadow_check"] == "type -a codex-team"
+    assert "shell function or alias" in receipt["shadow_guidance"]
     assert command.is_file()
     assert os.access(command, os.X_OK)
     assert not (home / ".local").exists()
@@ -126,3 +128,24 @@ def test_that_installer_is_idempotent_but_refuses_to_overwrite_an_unmanaged_comm
     assert conflict.returncode == 2
     assert json.loads(conflict.stdout)["code"] == "CODEX_TEAM_INSTALL_CONFLICT"
     assert command.read_text(encoding="utf-8") == "user owned\n"
+
+
+def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis() -> None:
+    for path in (
+        ROOT / "README.md",
+        ROOT / "README_EN.md",
+        SKILL_SOURCE / "SKILL.md",
+    ):
+        content = path.read_text(encoding="utf-8")
+        assert "install_codex_team.py" in content
+        assert "type -a codex-team" in content
+        assert "0.3.2" in content
+
+
+def test_that_doctor_and_start_do_not_treat_static_features_as_native_attestation() -> None:
+    content = (ROOT / "src" / "agent_task_scheduler" / "codex_team" / "cli.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Static multi_agent feature status is not native custom-agent attestation." in content
+    assert "agent/thread id, model, or reasoning receipt fields fail closed." in content

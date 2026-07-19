@@ -32,6 +32,11 @@ _MODELS = {
     "window_c": ("gpt-5.6-luna", "medium"),
     "window_d": ("gpt-5.6-luna", "medium"),
 }
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.2-py3-none-any.whl"
+_NATIVE_ATTESTATION_NOTE = (
+    "Static multi_agent feature status is not native custom-agent attestation. "
+    "missing agent_type, agent/thread id, model, or reasoning receipt fields fail closed."
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -154,6 +159,10 @@ def _doctor(root: Path) -> dict[str, object]:
         "ok": True,
         "operation": "doctor",
         "project_root": str(root),
+        "native_identity": {
+            "status": "unverified",
+            "guidance": _NATIVE_ATTESTATION_NOTE,
+        },
         "roles": {
             label: {"worker_id": worker, "agent": agent}
             for label, (worker, agent) in _ROLES.items()
@@ -164,9 +173,12 @@ def _doctor(root: Path) -> dict[str, object]:
 def _start(root: Path, *, role: str | None) -> int:
     if role is None:
         prompt = (
-            "Start a fresh project-scoped team root. Native-spawn product_manager with "
-            "fork_turns=none. Read this project's handoff, CLAUDE.md, AGENTS.md, and "
-            "global-scheduler Skill before dispatching. Create a new agent each time."
+            "YOU ARE ALREADY THE FRESH TEAM ROOT. do not call codex-team, "
+            "codex-team init/doctor/start, codex resume, or launch nested Codex. "
+            "Read only the existing project handoff, CLAUDE.md, AGENTS.md, and "
+            "global-scheduler Skill, then directly native-spawn product_manager with "
+            "fork_turns=none. Create a new agent each time. "
+            + _NATIVE_ATTESTATION_NOTE
         )
         command = ["codex", "-C", str(root), prompt]
     else:
@@ -214,7 +226,7 @@ def _skill_source() -> Path:
 
 def _skill_is_current(skill_root: Path) -> bool:
     return (skill_root / "SKILL.md").is_file() and (
-        skill_root / "assets" / "agent_task_scheduler-0.3.1-py3-none-any.whl"
+        skill_root / "assets" / _BUNDLED_WHEEL_NAME
     ).is_file()
 
 

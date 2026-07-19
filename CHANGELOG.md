@@ -2,8 +2,15 @@
 
 ## Unreleased
 
+### 0.3.2
+
+- Made the first-use installer and documentation diagnose legacy shell command
+  shadowing without modifying shell profiles.
+- Hardened fresh team-root prompts against recursive `codex-team` or nested Codex
+  startup and clarified native runtime attestation fail-closed boundaries.
+
 - Added the Skill-relative, offline `install_codex_team.py` user-command
-  installer. It creates a private environment from the bundled 0.3.1 wheel,
+  installer. It creates a private environment from the bundled 0.3.2 wheel,
   writes only a managed launcher, reports PATH guidance, and refuses conflicts.
 - Documented the complete marketplace-plugin to first-use `codex-team` flow for
   POSIX and Windows without claiming a plugin post-install hook.

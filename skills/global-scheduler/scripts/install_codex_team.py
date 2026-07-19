@@ -109,6 +109,12 @@ def install(prefix: Path, skill_root: Path) -> dict[str, object]:
     receipt["path"] = (
         "available" if _path_contains(command.parent) else "add_bin_dir_to_PATH"
     )
+    receipt["shadow_check"] = "type -a codex-team"
+    receipt["shadow_guidance"] = (
+        "If this reports a shell function or alias before the managed launcher, "
+        "unset the current definition and remove its legacy shell-profile block manually; "
+        "this installer never edits shell profiles."
+    )
     if receipt["path"] != "available":
         receipt["path_hint"] = _path_hint(command.parent)
     return receipt
