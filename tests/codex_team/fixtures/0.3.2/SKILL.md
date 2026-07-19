@@ -15,7 +15,7 @@ directory. Do not ask the user to locate a plugin cache or clone this repository
 python scripts/install_codex_team.py
 ```
 
-The installer uses the bundled 0.3.3 wheel, creates a private user environment, and
+The installer uses the bundled 0.3.2 wheel, creates a private user environment, and
 places `codex-team` in the standard user bin directory. It emits one JSON receipt
 and never edits shell profiles or PATH. If the receipt says the bin is not on
 PATH, show its one-time path hint, then use `codex-team init`, `codex-team doctor`,

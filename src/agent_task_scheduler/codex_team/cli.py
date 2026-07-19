@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import io
 import json
 import shutil
 import subprocess
 import sys
 import tomllib
+import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -32,7 +34,22 @@ _MODELS = {
     "window_c": ("gpt-5.6-luna", "medium"),
     "window_d": ("gpt-5.6-luna", "medium"),
 }
-_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.2-py3-none-any.whl"
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.3-py3-none-any.whl"
+_SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
+    {
+        "agent_task_scheduler-0.3.1-py3-none-any.whl",
+        "agent_task_scheduler-0.3.2-py3-none-any.whl",
+    }
+)
+_SUPPORTED_SKILL_WHEELS = {
+    _BUNDLED_WHEEL_NAME: "0.3.3",
+    **{wheel: wheel.split("-")[1] for wheel in _SUPPORTED_LEGACY_WHEEL_NAMES},
+}
+_REQUIRED_SKILL_FILES = (
+    "SKILL.md",
+    "scripts/install.py",
+    "scripts/install_codex_team.py",
+)
 _NATIVE_ATTESTATION_NOTE = (
     "Static multi_agent feature status is not native custom-agent attestation. "
     "missing agent_type, agent/thread id, model, or reasoning receipt fields fail closed."
@@ -50,7 +67,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(raw_arguments)
     root = _resolve_root(args.project_root)
     if args.command == "init":
-        receipt = _init(root)
+        try:
+            receipt = _init(root)
+        except Exception as error:
+            receipt = _failure("CODEX_TEAM_MIGRATION_FAILED", str(error), [])
         return _emit(receipt, exit_code=0 if receipt["ok"] else 2)
     diagnosis = _doctor(root)
     if not diagnosis["ok"]:
@@ -88,7 +108,14 @@ def _init(root: Path) -> dict[str, object]:
         if not _compatible(root / relative, content)
     ]
     skill_target = root / ".agents" / "skills" / "global-scheduler"
-    if skill_target.exists() and not _skill_is_current(skill_target):
+    skill_status, _ = _skill_status(skill_target)
+    if (
+        skill_target.exists()
+        and skill_status == "supported_legacy"
+        and not _legacy_is_stock(skill_target)
+    ):
+        conflicts.append(str(skill_target.relative_to(root)))
+    elif skill_target.exists() and skill_status == "invalid":
         conflicts.append(str(skill_target.relative_to(root)))
     if (root / ".scheduler").exists() and not (
         root / ".scheduler" / "project.json"
@@ -106,7 +133,31 @@ def _init(root: Path) -> dict[str, object]:
         path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             path.write_text(content, encoding="utf-8")
-    if not skill_target.exists():
+    upgraded_from = None
+    if skill_status == "supported_legacy":
+        upgraded_from = _wheel_version(next((skill_target / "assets").glob("*.whl")))
+        backup = skill_target.with_name(f"{skill_target.name}.backup")
+        if backup.exists():
+            return _failure(
+                "CODEX_TEAM_CONFLICT",
+                "manual backup handling required",
+                [str(backup.relative_to(root))],
+            )
+        skill_target.rename(backup)
+        try:
+            shutil.copytree(_skill_source(), skill_target)
+        except Exception:
+            if skill_target.exists():
+                shutil.rmtree(skill_target)
+            backup.rename(skill_target)
+            receipt = _failure(
+                "CODEX_TEAM_MIGRATION_FAILED",
+                "skill staging failed and was rolled back",
+                [],
+            )
+            receipt["migration"] = {"rolled_back": True}
+            return receipt
+    elif not skill_target.exists():
         shutil.copytree(_skill_source(), skill_target)
     if not (root / ".scheduler" / "project.json").is_file():
         with contextlib.redirect_stdout(io.StringIO()):
@@ -120,17 +171,40 @@ def _init(root: Path) -> dict[str, object]:
                     root.name,
                 ]
             )
-    installer = skill_target / "scripts" / "install.py"
-    subprocess.run(
-        [sys.executable, str(installer), "--project-root", str(root)],
-        check=True,
-        stdout=subprocess.DEVNULL,
-    )
+    installer_root = skill_target
+    installer = installer_root / "scripts" / "install.py"
+    try:
+        subprocess.run(
+            [sys.executable, str(installer), "--project-root", str(root)],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
+    except Exception:
+        if upgraded_from is not None:
+            shutil.rmtree(skill_target)
+            backup.rename(skill_target)
+        receipt = _failure(
+            "CODEX_TEAM_MIGRATION_FAILED",
+            "installer failed and skill was rolled back",
+            [],
+        )
+        receipt["migration"] = {"rolled_back": True}
+        return receipt
+    if upgraded_from is not None:
+        shutil.rmtree(backup)
     return {
         "ok": True,
         "operation": "init",
         "project_root": str(root),
         "created": sorted(expected),
+        "upgraded_from": upgraded_from,
+        "upgraded_to": "0.3.3" if upgraded_from else None,
+        "migration": {
+            "upgraded_from": upgraded_from,
+            "upgraded_to": "0.3.3" if upgraded_from else None,
+            "rolled_back": False,
+            "transient_files_discarded": upgraded_from is not None,
+        },
     }
 
 
@@ -142,7 +216,10 @@ def _doctor(root: Path) -> dict[str, object]:
     ]
     if not (root / ".scheduler" / "project.json").is_file():
         missing.append(".scheduler/project.json")
-    if not _skill_is_current(root / ".agents" / "skills" / "global-scheduler"):
+    skill_status, skill_wheel = _skill_status(
+        root / ".agents" / "skills" / "global-scheduler"
+    )
+    if skill_status != "current":
         missing.append(".agents/skills/global-scheduler/SKILL.md")
     if (
         not (root / ".venv" / "bin" / "scheduler").is_file()
@@ -159,6 +236,11 @@ def _doctor(root: Path) -> dict[str, object]:
         "ok": True,
         "operation": "doctor",
         "project_root": str(root),
+        "skill": {
+            "status": skill_status,
+            "current": skill_status == "current",
+            "wheel": skill_wheel,
+        },
         "native_identity": {
             "status": "unverified",
             "guidance": _NATIVE_ATTESTATION_NOTE,
@@ -177,8 +259,7 @@ def _start(root: Path, *, role: str | None) -> int:
             "codex-team init/doctor/start, codex resume, or launch nested Codex. "
             "Read only the existing project handoff, CLAUDE.md, AGENTS.md, and "
             "global-scheduler Skill, then directly native-spawn product_manager with "
-            "fork_turns=none. Create a new agent each time. "
-            + _NATIVE_ATTESTATION_NOTE
+            "fork_turns=none. Create a new agent each time. " + _NATIVE_ATTESTATION_NOTE
         )
         command = ["codex", "-C", str(root), prompt]
     else:
@@ -224,10 +305,98 @@ def _skill_source() -> Path:
     return Path(__file__).parents[3] / "skills" / "global-scheduler"
 
 
-def _skill_is_current(skill_root: Path) -> bool:
-    return (skill_root / "SKILL.md").is_file() and (
-        skill_root / "assets" / _BUNDLED_WHEEL_NAME
-    ).is_file()
+def _skill_status(skill_root: Path) -> tuple[str, str | None]:
+    if not all((skill_root / relative).is_file() for relative in _REQUIRED_SKILL_FILES):
+        return "invalid", None
+    wheels = sorted((skill_root / "assets").glob("agent_task_scheduler-*.whl"))
+    if len(wheels) != 1:
+        return "invalid", None
+    wheel_name = wheels[0].name
+    expected_version = _SUPPORTED_SKILL_WHEELS.get(wheel_name)
+    if expected_version is None or _wheel_version(wheels[0]) != expected_version:
+        return "invalid", wheel_name
+    if wheel_name == _BUNDLED_WHEEL_NAME:
+        try:
+            marker_data = json.loads(
+                (skill_root / "assets" / "managed-skill.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, json.JSONDecodeError):
+            return "invalid", wheel_name
+        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.3":
+            return "invalid", wheel_name
+        source = _skill_source().resolve()
+        if skill_root.resolve() != source and not _same_skill_tree(skill_root, source):
+            return "invalid", wheel_name
+        return "current", wheel_name
+    if wheel_name in _SUPPORTED_LEGACY_WHEEL_NAMES:
+        return "supported_legacy", wheel_name
+    return "invalid", wheel_name
+
+
+def _wheel_version(wheel: Path) -> str | None:
+    try:
+        with zipfile.ZipFile(wheel) as archive:
+            metadata_paths = [
+                path
+                for path in archive.namelist()
+                if path.endswith(".dist-info/METADATA")
+            ]
+            if len(metadata_paths) != 1:
+                return None
+            for line in archive.read(metadata_paths[0]).decode("utf-8").splitlines():
+                if line.startswith("Version: "):
+                    return line.removeprefix("Version: ").strip()
+    except (OSError, UnicodeDecodeError, zipfile.BadZipFile):
+        return None
+    return None
+
+
+def _legacy_is_stock(skill_root: Path) -> bool:
+    wheel = next((skill_root / "assets").glob("*.whl"), None)
+    version = _wheel_version(wheel) if wheel else None
+    manifest_path = Path(__file__).parent / "assets" / "legacy_skill_manifests.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))["versions"].get(
+        version or ""
+    )
+    if manifest is None:
+        return False
+    files = {
+        path.relative_to(skill_root).as_posix(): path
+        for path in skill_root.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    }
+    variants = manifest.pop("wheel_variants", [])
+    wheel_relative = f"assets/agent_task_scheduler-{version}-py3-none-any.whl"
+    return set(files) == set(manifest) and all(
+        (
+            _sha256(path) in variants
+            if relative == wheel_relative
+            else _sha256(path) == manifest[relative]
+        )
+        for relative, path in files.items()
+    )
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _same_skill_tree(target: Path, source: Path) -> bool:
+    def files(root: Path) -> dict[str, Path]:
+        return {
+            path.relative_to(root).as_posix(): path
+            for path in root.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts
+        }
+
+    target_files = files(target)
+    source_files = files(source)
+    return set(target_files) == set(source_files) and all(
+        _sha256(target_files[relative]) == _sha256(source_path)
+        for relative, source_path in source_files.items()
+    )
 
 
 def _agent_toml(agent: str) -> str:

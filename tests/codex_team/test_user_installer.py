@@ -17,14 +17,19 @@ SKILL_SOURCE = ROOT / "skills" / "global-scheduler"
 
 def test_that_user_launcher_paths_follow_the_supported_platform_conventions() -> None:
     installer = SKILL_SOURCE / "scripts" / "install_codex_team.py"
-    specification = importlib.util.spec_from_file_location("codex_team_installer", installer)
+    specification = importlib.util.spec_from_file_location(
+        "codex_team_installer", installer
+    )
     assert specification is not None and specification.loader is not None
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     prefix = Path("/temporary/prefix")
 
     assert module.command_path(prefix, windows=False) == prefix / "bin" / "codex-team"
-    assert module.command_path(prefix, windows=True) == prefix / "Scripts" / "codex-team.cmd"
+    assert (
+        module.command_path(prefix, windows=True)
+        == prefix / "Scripts" / "codex-team.cmd"
+    )
 
 
 def test_that_clean_skill_copy_installs_portable_command_to_an_isolated_prefix(
@@ -76,7 +81,11 @@ def test_that_clean_skill_copy_installs_portable_command_to_an_isolated_prefix(
     assert os.access(command, os.X_OK)
     assert not (home / ".local").exists()
 
-    for arguments in (("init", str(target)), ("doctor", str(target)), ("role-A", str(target))):
+    for arguments in (
+        ("init", str(target)),
+        ("doctor", str(target)),
+        ("role-A", str(target)),
+    ):
         completed = subprocess.run(
             [str(command), *arguments],
             check=False,
@@ -87,7 +96,9 @@ def test_that_clean_skill_copy_installs_portable_command_to_an_isolated_prefix(
         assert completed.returncode == 0, completed.stderr
         assert json.loads(completed.stdout)["ok"] is True
 
-    assert json.loads((tmp_path / "codex-arguments.json").read_text(encoding="utf-8"))[:2] == [
+    assert json.loads((tmp_path / "codex-arguments.json").read_text(encoding="utf-8"))[
+        :2
+    ] == [
         "-C",
         str(target.resolve()),
     ]
@@ -97,7 +108,9 @@ def test_that_installer_is_idempotent_but_refuses_to_overwrite_an_unmanaged_comm
     tmp_path: Path,
 ) -> None:
     prefix = tmp_path / "prefix"
-    installer = ROOT / "skills" / "global-scheduler" / "scripts" / "install_codex_team.py"
+    installer = (
+        ROOT / "skills" / "global-scheduler" / "scripts" / "install_codex_team.py"
+    )
     command = prefix / "bin" / "codex-team"
 
     first = subprocess.run(
@@ -130,7 +143,9 @@ def test_that_installer_is_idempotent_but_refuses_to_overwrite_an_unmanaged_comm
     assert command.read_text(encoding="utf-8") == "user owned\n"
 
 
-def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis() -> None:
+def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis() -> (
+    None
+):
     for path in (
         ROOT / "README.md",
         ROOT / "README_EN.md",
@@ -139,13 +154,18 @@ def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis(
         content = path.read_text(encoding="utf-8")
         assert "install_codex_team.py" in content
         assert "type -a codex-team" in content
-        assert "0.3.2" in content
+        assert "0.3.3" in content
 
 
-def test_that_doctor_and_start_do_not_treat_static_features_as_native_attestation() -> None:
-    content = (ROOT / "src" / "agent_task_scheduler" / "codex_team" / "cli.py").read_text(
-        encoding="utf-8"
+def test_that_doctor_and_start_do_not_treat_static_features_as_native_attestation() -> (
+    None
+):
+    content = (
+        ROOT / "src" / "agent_task_scheduler" / "codex_team" / "cli.py"
+    ).read_text(encoding="utf-8")
+
+    assert (
+        "Static multi_agent feature status is not native custom-agent attestation."
+        in content
     )
-
-    assert "Static multi_agent feature status is not native custom-agent attestation." in content
     assert "agent/thread id, model, or reasoning receipt fields fail closed." in content

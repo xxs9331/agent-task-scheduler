@@ -15,20 +15,13 @@ directory. Do not ask the user to locate a plugin cache or clone this repository
 python scripts/install_codex_team.py
 ```
 
-The installer uses the bundled 0.3.3 wheel, creates a private user environment, and
+The installer uses the bundled wheel, creates a private user environment, and
 places `codex-team` in the standard user bin directory. It emits one JSON receipt
 and never edits shell profiles or PATH. If the receipt says the bin is not on
 PATH, show its one-time path hint, then use `codex-team init`, `codex-team doctor`,
 and `codex-team start` from the target project. For a controlled installation or
 tests, pass `--prefix <temporary-prefix>`. It fails closed if an existing
 `codex-team` command is not managed by this installer.
-
-After installation, run `type -a codex-team`. If an old shell function or alias
-appears before the managed launcher, unset it for the current shell and remove its
-legacy block from the shell profile manually; the installer will never modify a
-shell profile. A static `multi_agent` feature report does not prove native
-custom-agent selection or identity attestation: missing agent type, agent/thread
-id, effective model, or reasoning effort must fail closed.
 
 Use the installed project-local scheduler for durable task routing and lifecycle operations. This Skill stores no task data, grants no role additional authority, and never edits scheduler JSON directly.
 

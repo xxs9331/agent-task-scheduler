@@ -11,7 +11,7 @@ def test_that_plugin_manifest_points_to_discoverable_skills() -> None:
     manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text())
 
     assert manifest["name"] == "global-scheduler"
-    assert manifest["version"] == "0.3.2"
+    assert manifest["version"] == "0.3.3"
     assert manifest["skills"] == "./skills/"
     assert (ROOT / manifest["skills"] / "global-scheduler" / "SKILL.md").is_file()
     assert manifest["interface"]["capabilities"] == ["Interactive", "Read", "Write"]
@@ -67,7 +67,7 @@ def test_that_skill_bundles_the_relative_user_command_installer() -> None:
     skill = ROOT / "skills" / "global-scheduler"
 
     assert (skill / "scripts" / "install_codex_team.py").is_file()
-    assert (skill / "assets" / "agent_task_scheduler-0.3.2-py3-none-any.whl").is_file()
+    assert (skill / "assets" / "agent_task_scheduler-0.3.3-py3-none-any.whl").is_file()
 
 
 def test_that_readmes_explain_the_skill_and_link_the_task_plan_template() -> None:

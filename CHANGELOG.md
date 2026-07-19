@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 0.3.3
+
+- Made `codex-team doctor` accept complete, explicitly supported 0.3.1 project
+  Skills without overwriting them, while reporting a machine-readable legacy
+  warning. Unknown, incomplete, and damaged Skills still fail closed.
+
 ### 0.3.2
 
 - Made the first-use installer and documentation diagnose legacy shell command

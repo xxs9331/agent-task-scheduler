@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import hashlib
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from agent_task_scheduler.codex_team.cli import main
 
@@ -175,6 +180,205 @@ def test_that_init_rejects_an_existing_skill_with_an_old_bundled_wheel(
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["code"] == "CODEX_TEAM_CONFLICT"
     assert ".agents/skills/global-scheduler" in receipt["conflicts"]
+
+
+@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2"])
+def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
+    tmp_path: Path, capsys, legacy_version: str
+) -> None:
+    project = tmp_path / "legacy project"
+    _initialize_with_legacy_skill(project, capsys, legacy_version)
+    assert main(["init", str(project)]) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["upgraded_from"] == legacy_version
+    assert receipt["upgraded_to"] == "0.3.3"
+    assert main(["doctor", str(project)]) == 0
+    assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
+    assert not (project / ".agents" / "skills" / "global-scheduler.backup").exists()
+
+
+def test_that_doctor_fails_closed_when_a_supported_legacy_skill_lacks_its_installer(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "broken legacy project"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
+    (skill / "scripts" / "install.py").unlink()
+
+    assert main(["doctor", str(project)]) == 2
+
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_NOT_INITIALIZED"
+    assert ".agents/skills/global-scheduler/SKILL.md" in receipt["conflicts"]
+
+
+def test_that_init_rejects_a_modified_managed_legacy_skill(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "modified legacy"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
+    (skill / "SKILL.md").write_text("modified", encoding="utf-8")
+    assert main(["init", str(project)]) == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "CODEX_TEAM_CONFLICT"
+    assert (skill / "SKILL.md").read_text(encoding="utf-8") == "modified"
+
+
+def test_that_init_rejects_a_managed_legacy_skill_with_an_extra_file(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "extra legacy"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.2")
+    (skill / "extra.txt").write_text("user", encoding="utf-8")
+    assert main(["init", str(project)]) == 2
+    assert (skill / "extra.txt").read_text(encoding="utf-8") == "user"
+
+
+@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2"])
+def test_that_init_rejects_a_same_version_wheel_outside_official_variants(
+    tmp_path: Path, capsys, legacy_version: str
+) -> None:
+    project = tmp_path / "unknown same version"
+    skill = _initialize_with_legacy_skill(project, capsys, legacy_version)
+    wheel = next((skill / "assets").glob("*.whl"))
+    with wheel.open("ab") as stream:
+        stream.write(b"untrusted-but-valid-zip-trailer")
+    original = _tree_digest(skill)
+
+    assert main(["init", str(project)]) == 2
+
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_CONFLICT"
+    assert _tree_digest(skill) == original
+    assert not (skill.parent / "global-scheduler.backup").exists()
+
+
+def test_that_doctor_fails_closed_when_the_current_managed_marker_is_tampered(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "tampered current"
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    marker = (
+        project
+        / ".agents"
+        / "skills"
+        / "global-scheduler"
+        / "assets"
+        / "managed-skill.json"
+    )
+    marker.write_text("{}", encoding="utf-8")
+    assert main(["doctor", str(project)]) == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "CODEX_TEAM_NOT_INITIALIZED"
+
+
+def test_that_init_ignores_transient_pycache_when_migrating_stock_legacy(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "transient legacy"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
+    cache = skill / "scripts" / "__pycache__"
+    cache.mkdir()
+    (cache / "install.cpython-312.pyc").write_bytes(b"transient")
+    assert main(["init", str(project)]) == 0
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.3"
+
+
+def test_that_init_rolls_back_a_partial_skill_copy_failure(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "copy rollback"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
+    original = _tree_digest(skill)
+    real_copytree = shutil.copytree
+
+    def partial_copy(source: Path, target: Path, *args, **kwargs) -> Path:
+        target.mkdir(parents=True)
+        (target / "partial").write_text("partial", encoding="utf-8")
+        raise OSError("copy failed")
+
+    monkeypatch.setattr(
+        "agent_task_scheduler.codex_team.cli.shutil.copytree", partial_copy
+    )
+    assert main(["init", str(project)]) == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_MIGRATION_FAILED"
+    assert _tree_digest(skill) == original
+    assert not (skill.parent / "global-scheduler.backup").exists()
+    monkeypatch.setattr(
+        "agent_task_scheduler.codex_team.cli.shutil.copytree", real_copytree
+    )
+
+
+def test_that_init_rolls_back_when_current_installer_fails(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "installer rollback"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.2")
+    original = _tree_digest(skill)
+    monkeypatch.setattr(
+        "agent_task_scheduler.codex_team.cli.subprocess.run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            subprocess.CalledProcessError(1, args)
+        ),
+    )
+    assert main(["init", str(project)]) == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "CODEX_TEAM_MIGRATION_FAILED"
+    assert _tree_digest(skill) == original
+    assert not (skill.parent / "global-scheduler.backup").exists()
+
+
+def _tree_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(path for path in root.rglob("*") if path.is_file()):
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def test_that_doctor_fails_closed_for_an_unknown_future_skill_wheel(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "unknown project"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
+    wheel = next((skill / "assets").glob("*.whl"))
+    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.4-py3-none-any.whl")
+
+    assert main(["doctor", str(project)]) == 2
+
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_NOT_INITIALIZED"
+    assert ".agents/skills/global-scheduler/SKILL.md" in receipt["conflicts"]
+
+
+def test_that_doctor_rejects_a_renamed_wheel_with_mismatched_metadata(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "renamed wheel project"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
+    wheel = next((skill / "assets").glob("*.whl"))
+    shutil.copyfile(
+        Path(__file__).parents[2]
+        / "skills"
+        / "global-scheduler"
+        / "assets"
+        / "agent_task_scheduler-0.3.3-py3-none-any.whl",
+        wheel,
+    )
+
+    assert main(["doctor", str(project)]) == 2
+
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_NOT_INITIALIZED"
+    assert ".agents/skills/global-scheduler/SKILL.md" in receipt["conflicts"]
+
+
+def _initialize_with_legacy_skill(project: Path, capsys, version: str) -> Path:
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    skill = project / ".agents" / "skills" / "global-scheduler"
+    shutil.rmtree(skill)
+    fixture = Path(__file__).parent / "fixtures" / version
+    shutil.copytree(fixture, skill)
+    return skill
 
 
 def _install_fake_codex(root: Path, monkeypatch) -> None:
