@@ -29,7 +29,7 @@ _CANONICAL_AGENT_FILES = frozenset(
         "window_d.toml",
     }
 )
-_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.7-py3-none-any.whl"
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.8-py3-none-any.whl"
 _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     {
         "agent_task_scheduler-0.3.1-py3-none-any.whl",
@@ -38,10 +38,11 @@ _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
         "agent_task_scheduler-0.3.4-py3-none-any.whl",
         "agent_task_scheduler-0.3.5-py3-none-any.whl",
         "agent_task_scheduler-0.3.6-py3-none-any.whl",
+        "agent_task_scheduler-0.3.7-py3-none-any.whl",
     }
 )
 _SUPPORTED_SKILL_WHEELS = {
-    _BUNDLED_WHEEL_NAME: "0.3.7",
+    _BUNDLED_WHEEL_NAME: "0.3.8",
     **{wheel: wheel.split("-")[1] for wheel in _SUPPORTED_LEGACY_WHEEL_NAMES},
 }
 _REQUIRED_SKILL_FILES = (
@@ -257,7 +258,7 @@ def _init(root: Path) -> dict[str, object]:
     for legacy_backup in legacy_backups:
         if legacy_backup.exists():
             shutil.rmtree(legacy_backup)
-    upgraded_to = "0.3.7" if skill_existed and replaced_skill else None
+    upgraded_to = "0.3.8" if skill_existed and replaced_skill else None
     return {
         "ok": True,
         "operation": "init",
@@ -416,7 +417,7 @@ def _skill_status(skill_root: Path) -> tuple[str, str | None]:
             )
         except (OSError, json.JSONDecodeError):
             return "invalid", wheel_name
-        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.7":
+        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.8":
             return "invalid", wheel_name
         source = _skill_source().resolve()
         if skill_root.resolve() != source and not _same_skill_tree(skill_root, source):

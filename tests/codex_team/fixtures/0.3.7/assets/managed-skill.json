@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "managed_skill": "codex-team",
-  "version": "0.3.8",
+  "version": "0.3.7",
   "integrity": "sha256-manifest",
   "files": {
     "README.md": "d616cc2411e3a7d3884065fb95dfc182f2ea2966cd6ec38f1921db05442f0978",
-    "SKILL.md": "853e5bac7c54c19bfd6a4bdc3ce07bcf1ab8b06437710f19b30f5f914b8b1c9c",
+    "SKILL.md": "ba3665ba082f60dadc5268fe05fd1da11181eee24a4fc84a7a8265a796773f2d",
     "assets/任务计划书模板.md": "5e719e04853f751434daef3dfa85f7c53fe50fc827842470660ba28530852f2c",
     "references/bootstrap.md": "859e5da4c5c77d578bf4016db27edb5d13937ca9049fafcd7f718cbf325ff004",
     "references/contract.md": "24e74c9588e1aa18e09edc4201d6c3ce9f4fe91a644537795794ac7acf6133bf",
@@ -13,7 +13,7 @@
     "references/migration.md": "83e5faedc409bc95267ae9c2ce8fd918ebc893e357564618826cbc2e2a0a8a4b",
     "references/platform.md": "264f2a83669310a451d401a4f8eda9f655691433ff9531d53f43846f31820758",
     "scripts/install.py": "4f8473e08553bf8a53d947c31c7e6f6cfffe792906ff4dd54ae5c6006b08ed8a",
-    "scripts/install_codex_team.py": "e030f77f62c6383e47a52fc55386c34f97ba5488876d8ae88f1a4666ca97497b",
+    "scripts/install_codex_team.py": "75aa9a55fcb1900cfe22c5c3d2c51192a5fb9a0a65239fd99903549d4f16d15a",
     "scripts/reconcile_handoff.py": "5122543717709d75f4f1450f9a11ccbe975adfe223df4443d9bf5131df4b112f"
   }
 }

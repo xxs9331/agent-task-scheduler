@@ -225,17 +225,17 @@ def test_that_init_installs_the_canonical_full_role_contracts_and_reconciler(
     assert "reconcile_handoff.py" in skill_text
 
 
-def test_that_init_transactionally_upgrades_a_stock_036_skill_to_037(
+def test_that_init_transactionally_upgrades_a_stock_037_skill_to_038(
     tmp_path: Path, capsys
 ) -> None:
-    project = tmp_path / "0.3.6 project"
-    skill = _initialize_with_legacy_skill(project, capsys, "0.3.6")
+    project = tmp_path / "0.3.7 project"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.7")
 
     assert main(["init", str(project)]) == 0
 
     receipt = json.loads(capsys.readouterr().out)
-    assert receipt["upgraded_from"] == "0.3.6"
-    assert receipt["upgraded_to"] == "0.3.7"
+    assert receipt["upgraded_from"] == "0.3.7"
+    assert receipt["upgraded_to"] == "0.3.8"
     assert not (skill.parent / "codex-team.backup").exists()
     assert main(["doctor", str(project)]) == 0
 
@@ -467,7 +467,7 @@ def test_that_init_replaces_an_existing_skill_with_an_unreadable_old_wheel(
 
 
 @pytest.mark.parametrize(
-    "legacy_version", ["0.3.1", "0.3.2", "0.3.3", "0.3.4", "0.3.5", "0.3.6"]
+    "legacy_version", ["0.3.1", "0.3.2", "0.3.3", "0.3.4", "0.3.5", "0.3.6", "0.3.7"]
 )
 def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     tmp_path: Path, capsys, legacy_version: str
@@ -477,7 +477,7 @@ def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     assert main(["init", str(project)]) == 0
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == legacy_version
-    assert receipt["upgraded_to"] == "0.3.7"
+    assert receipt["upgraded_to"] == "0.3.8"
     assert main(["doctor", str(project)]) == 0
     assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
     assert not (project / ".agents" / "skills" / "codex-team.backup").exists()
@@ -504,7 +504,7 @@ def test_that_init_replaces_a_modified_managed_legacy_skill(
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     (skill / "SKILL.md").write_text("modified", encoding="utf-8")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.7"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.8"
     assert (skill / "SKILL.md").read_text(encoding="utf-8") != "modified"
 
 
@@ -560,7 +560,7 @@ def test_that_init_ignores_transient_pycache_when_migrating_stock_legacy(
     cache.mkdir()
     (cache / "install.cpython-312.pyc").write_bytes(b"transient")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.7"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.8"
 
 
 def test_that_init_rolls_back_a_partial_skill_copy_failure(
@@ -727,7 +727,7 @@ def test_that_doctor_fails_closed_for_an_unknown_future_skill_wheel(
     project = tmp_path / "unknown project"
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     wheel = next((skill / "assets").glob("*.whl"))
-    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.7-py3-none-any.whl")
+    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.8-py3-none-any.whl")
 
     assert main(["doctor", str(project)]) == 2
 
@@ -747,7 +747,7 @@ def test_that_doctor_rejects_a_renamed_wheel_with_mismatched_metadata(
         / "skills"
         / "codex-team"
         / "assets"
-        / "agent_task_scheduler-0.3.7-py3-none-any.whl",
+        / "agent_task_scheduler-0.3.8-py3-none-any.whl",
         wheel,
     )
 

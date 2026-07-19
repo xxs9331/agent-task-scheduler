@@ -84,17 +84,7 @@ def install(prefix: Path, skill_root: Path) -> dict[str, object]:
     operation = "upgraded" if environment.exists() else "installed"
     if not python.is_file():
         _run([sys.executable, "-m", "venv", str(environment)])
-    _run(
-        [
-            str(python),
-            "-m",
-            "pip",
-            "install",
-            "--no-deps",
-            "--force-reinstall",
-            str(wheel),
-        ]
-    )
+    _run([str(python), "-m", "pip", "install", "--no-deps", "--upgrade", str(wheel)])
     command.parent.mkdir(parents=True, exist_ok=True)
     _write_launcher(command, python)
     metadata = {

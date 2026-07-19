@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import io
 import os
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 
@@ -141,6 +143,61 @@ def test_that_installer_is_idempotent_but_refuses_to_overwrite_an_unmanaged_comm
     assert command.read_text(encoding="utf-8") == "user owned\n"
 
 
+def test_that_reinstalling_a_changed_same_version_wheel_replaces_the_managed_package(
+    tmp_path: Path,
+) -> None:
+    skill_root = tmp_path / "skill"
+    shutil.copytree(SKILL_SOURCE, skill_root)
+    prefix = tmp_path / "prefix"
+    installer = skill_root / "scripts" / "install_codex_team.py"
+    marker = (
+        prefix
+        / ".codex-team"
+        / "venv"
+        / "lib"
+        / f"python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+        / "agent_task_scheduler"
+        / "same_version_marker.py"
+    )
+
+    first = subprocess.run(
+        [sys.executable, str(installer), "--prefix", str(prefix)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert first.returncode == 0, first.stderr
+    assert not marker.exists()
+
+    wheel = next((skill_root / "assets").glob("agent_task_scheduler-*.whl"))
+    with zipfile.ZipFile(wheel) as archive:
+        contents = {
+            info.filename: archive.read(info.filename)
+            for info in archive.infolist()
+            if not info.is_dir()
+        }
+    contents["agent_task_scheduler/same_version_marker.py"] = b"MARKER = 'replaced'\n"
+    rebuilt = io.BytesIO()
+    with zipfile.ZipFile(rebuilt, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, content in contents.items():
+            archive.writestr(name, content)
+    wheel.write_bytes(rebuilt.getvalue())
+
+    second = subprocess.run(
+        [sys.executable, str(installer), "--prefix", str(prefix)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert second.returncode == 0, second.stderr
+    assert marker.read_text(encoding="utf-8") == "MARKER = 'replaced'\n"
+    assert json.loads(second.stdout)["wheel_sha256"] != json.loads(first.stdout)[
+        "wheel_sha256"
+    ]
+
+
 def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis() -> (
     None
 ):
@@ -152,7 +209,7 @@ def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis(
         content = path.read_text(encoding="utf-8")
         assert "install_codex_team.py" in content
         assert "type -a codex-team" in content
-        assert "0.3.7" in content
+        assert "0.3.8" in content
 
 
 def test_that_doctor_and_start_do_not_treat_static_features_as_native_attestation() -> (

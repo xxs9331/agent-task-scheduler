@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 0.3.8
+
+- Force-reinstall the exact bundled wheel in the private managed user environment,
+  so a changed wheel payload is installed even when its package version is unchanged.
+- Added transactional stock-managed 0.3.7-to-0.3.8 migration coverage and retained
+  0.3.7 as a supported legacy Skill fixture.
+
 ### 0.3.7
 
 - Replaced generated role stubs with packaged canonical six-role TOML contracts,
