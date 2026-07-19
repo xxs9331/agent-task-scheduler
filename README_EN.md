@@ -21,15 +21,17 @@ does not—and must not claim to—have a post-install hook. Restart Codex, then
 it in any project to “install codex-team and bootstrap team mode.” The Skill runs
 its own relative `scripts/install_codex_team.py`; the user never needs to clone
 this repository, copy files, or discover a plugin-cache path. The installer uses
-the bundled 0.3.3 wheel to create a private user environment and managed launcher,
+the bundled 0.3.4 wheel to create a private user environment and managed launcher,
 emits a JSON receipt, and never edits PATH, shell profiles, or plugin files. If
 the receipt says the bin directory is absent from PATH, apply its one-time hint in
 the current shell. After installation, run `type -a codex-team`; if an old shell
 function or alias appears before the managed launcher, unset it in the current shell
 and remove the legacy shell-profile block manually. The installer never changes shell
 profiles. Static `multi_agent` feature status is not native custom-agent attestation;
-missing agent type, agent/thread id, effective model, or reasoning effort must fail
-closed.
+the fresh root must verify the requested agent type, spawn agent/thread id, and the
+fixed model/reasoning contract from parent-visible native evidence. It then sends
+that attestation to the same `product_manager` thread. A child is not required to
+self-report parent-only fields; missing parent evidence still fails closed.
 
 Then run these commands from the target project:
 

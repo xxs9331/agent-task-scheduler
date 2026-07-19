@@ -56,6 +56,36 @@ def test_that_fresh_root_prompt_forbids_recursive_launcher_commands(
     assert "fork_turns=none" in prompt
 
 
+def test_that_fresh_root_requires_parent_side_native_attestation_before_pm_handoff(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "parent attestation"
+    _install_fake_codex(tmp_path, monkeypatch)
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+
+    assert main(["start", str(project)]) == 0
+
+    prompt = json.loads((tmp_path / "codex-arguments.json").read_text())[-1]
+    for evidence in (
+        "requested agent_type=product_manager",
+        "spawn agent_id",
+        "worker_id=product_manager",
+        "gpt-5.6-sol",
+        "reasoning_effort=high",
+        "fork_context=false",
+    ):
+        assert evidence in prompt
+    assert "send_input" in prompt
+    assert "same product_manager thread" in prompt
+    assert (
+        "Do not ask the child to manufacture or self-report parent-only receipt"
+        in prompt
+    )
+    assert "child cannot see its agent_id" in prompt
+    assert "close the child and fail closed" in prompt
+
+
 def test_that_a_bare_project_path_starts_the_resolved_project(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
@@ -182,7 +212,7 @@ def test_that_init_rejects_an_existing_skill_with_an_old_bundled_wheel(
     assert ".agents/skills/global-scheduler" in receipt["conflicts"]
 
 
-@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2"])
+@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2", "0.3.3"])
 def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     tmp_path: Path, capsys, legacy_version: str
 ) -> None:
@@ -191,7 +221,7 @@ def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     assert main(["init", str(project)]) == 0
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == legacy_version
-    assert receipt["upgraded_to"] == "0.3.3"
+    assert receipt["upgraded_to"] == "0.3.4"
     assert main(["doctor", str(project)]) == 0
     assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
     assert not (project / ".agents" / "skills" / "global-scheduler.backup").exists()
@@ -232,7 +262,7 @@ def test_that_init_rejects_a_managed_legacy_skill_with_an_extra_file(
     assert (skill / "extra.txt").read_text(encoding="utf-8") == "user"
 
 
-@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2"])
+@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2", "0.3.3"])
 def test_that_init_rejects_a_same_version_wheel_outside_official_variants(
     tmp_path: Path, capsys, legacy_version: str
 ) -> None:
@@ -279,7 +309,7 @@ def test_that_init_ignores_transient_pycache_when_migrating_stock_legacy(
     cache.mkdir()
     (cache / "install.cpython-312.pyc").write_bytes(b"transient")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.3"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.4"
 
 
 def test_that_init_rolls_back_a_partial_skill_copy_failure(
@@ -312,7 +342,7 @@ def test_that_init_rolls_back_when_current_installer_fails(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
     project = tmp_path / "installer rollback"
-    skill = _initialize_with_legacy_skill(project, capsys, "0.3.2")
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.3")
     original = _tree_digest(skill)
     monkeypatch.setattr(
         "agent_task_scheduler.codex_team.cli.subprocess.run",
@@ -340,7 +370,7 @@ def test_that_doctor_fails_closed_for_an_unknown_future_skill_wheel(
     project = tmp_path / "unknown project"
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     wheel = next((skill / "assets").glob("*.whl"))
-    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.4-py3-none-any.whl")
+    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.5-py3-none-any.whl")
 
     assert main(["doctor", str(project)]) == 2
 
@@ -360,7 +390,7 @@ def test_that_doctor_rejects_a_renamed_wheel_with_mismatched_metadata(
         / "skills"
         / "global-scheduler"
         / "assets"
-        / "agent_task_scheduler-0.3.3-py3-none-any.whl",
+        / "agent_task_scheduler-0.3.4-py3-none-any.whl",
         wheel,
     )
 

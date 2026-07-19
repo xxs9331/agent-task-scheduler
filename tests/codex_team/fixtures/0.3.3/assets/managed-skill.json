@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "managed_skill": "global-scheduler",
+  "version": "0.3.3",
+  "integrity": "sha256-manifest"
+  ,"files":{"README.md":"6efaca509c664ca69c6bb3de604406cd9b6a09fae50c52723d62a7506210010e","SKILL.md":"2ccc3dd6739030e973f37622a202cdfee76c1a2e9cec31e3842a335ba1bf826e","assets/任务计划书模板.md":"5e719e04853f751434daef3dfa85f7c53fe50fc827842470660ba28530852f2c","references/bootstrap.md":"d8b553c20b5c8cacecaf21882c89f10d578dbaef69718216d3fdccee9274fba8","references/contract.md":"24e74c9588e1aa18e09edc4201d6c3ce9f4fe91a644537795794ac7acf6133bf","references/errors.md":"f850a0d08bb424aed661bb8afd2f5ea667cbad6b2c586056fa3446c1a49f0aee","references/migration.md":"33bee39368e70c874a497fc98c75a03b5bc4973dfebc71a3ab067567eef3c5c9","references/platform.md":"264f2a83669310a451d401a4f8eda9f655691433ff9531d53f43846f31820758","scripts/install.py":"4f8473e08553bf8a53d947c31c7e6f6cfffe792906ff4dd54ae5c6006b08ed8a","scripts/install_codex_team.py":"75aa9a55fcb1900cfe22c5c3d2c51192a5fb9a0a65239fd99903549d4f16d15a"}
+}

@@ -34,15 +34,16 @@ _MODELS = {
     "window_c": ("gpt-5.6-luna", "medium"),
     "window_d": ("gpt-5.6-luna", "medium"),
 }
-_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.3-py3-none-any.whl"
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.4-py3-none-any.whl"
 _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     {
         "agent_task_scheduler-0.3.1-py3-none-any.whl",
         "agent_task_scheduler-0.3.2-py3-none-any.whl",
+        "agent_task_scheduler-0.3.3-py3-none-any.whl",
     }
 )
 _SUPPORTED_SKILL_WHEELS = {
-    _BUNDLED_WHEEL_NAME: "0.3.3",
+    _BUNDLED_WHEEL_NAME: "0.3.4",
     **{wheel: wheel.split("-")[1] for wheel in _SUPPORTED_LEGACY_WHEEL_NAMES},
 }
 _REQUIRED_SKILL_FILES = (
@@ -52,7 +53,21 @@ _REQUIRED_SKILL_FILES = (
 )
 _NATIVE_ATTESTATION_NOTE = (
     "Static multi_agent feature status is not native custom-agent attestation. "
-    "missing agent_type, agent/thread id, model, or reasoning receipt fields fail closed."
+    "Parent-side runtime evidence must include the requested agent type, spawn "
+    "agent/thread id, effective model, and reasoning effort; missing parent evidence "
+    "fails closed. Child self-report of parent-only fields is not required."
+)
+_PARENT_ATTESTATION_PROTOCOL = (
+    "Native-spawn requested agent_type=product_manager with fork_context=false. "
+    "The parent must capture the spawn receipt and verify its spawn agent_id, then "
+    "verify the project TOML contract says worker_id=product_manager, model "
+    "gpt-5.6-sol, and reasoning_effort=high. If the requested selector, spawn "
+    "agent_id, fixed model/effort contract, or fork_context=false evidence is "
+    "missing, close the child and fail closed. After verification, construct the "
+    "attestation in the parent and use send_input to inject it into the same "
+    "product_manager thread. Do not ask the child to manufacture or self-report "
+    "parent-only receipt fields. A child cannot see its agent_id by itself; that "
+    "alone is not an attestation failure."
 )
 
 
@@ -198,10 +213,10 @@ def _init(root: Path) -> dict[str, object]:
         "project_root": str(root),
         "created": sorted(expected),
         "upgraded_from": upgraded_from,
-        "upgraded_to": "0.3.3" if upgraded_from else None,
+        "upgraded_to": "0.3.4" if upgraded_from else None,
         "migration": {
             "upgraded_from": upgraded_from,
-            "upgraded_to": "0.3.3" if upgraded_from else None,
+            "upgraded_to": "0.3.4" if upgraded_from else None,
             "rolled_back": False,
             "transient_files_discarded": upgraded_from is not None,
         },
@@ -259,7 +274,8 @@ def _start(root: Path, *, role: str | None) -> int:
             "codex-team init/doctor/start, codex resume, or launch nested Codex. "
             "Read only the existing project handoff, CLAUDE.md, AGENTS.md, and "
             "global-scheduler Skill, then directly native-spawn product_manager with "
-            "fork_turns=none. Create a new agent each time. " + _NATIVE_ATTESTATION_NOTE
+            "fork_turns=none. Create a new agent each time. "
+            + _PARENT_ATTESTATION_PROTOCOL
         )
         command = ["codex", "-C", str(root), prompt]
     else:
@@ -324,7 +340,7 @@ def _skill_status(skill_root: Path) -> tuple[str, str | None]:
             )
         except (OSError, json.JSONDecodeError):
             return "invalid", wheel_name
-        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.3":
+        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.4":
             return "invalid", wheel_name
         source = _skill_source().resolve()
         if skill_root.resolve() != source and not _same_skill_tree(skill_root, source):

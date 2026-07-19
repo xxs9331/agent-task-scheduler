@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### 0.3.4
+
+- Changed fresh-root native identity handoff to use the parent-visible spawn
+  receipt and fixed custom-agent contract, then inject the verified attestation
+  into the same `product_manager` thread with `send_input`.
+- Stopped treating a child's inability to self-report parent-only agent/thread
+  fields as a spawn failure while retaining fail-closed behavior for missing
+  parent evidence or a mismatched project TOML contract.
+- Added guarded stock-managed 0.3.3 project migration to 0.3.4.
+
 ### 0.3.3
 
 - Made `codex-team doctor` accept complete, explicitly supported 0.3.1 project
