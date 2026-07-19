@@ -26,9 +26,7 @@ tests, pass `--prefix <temporary-prefix>`. It fails closed if an existing
 After installation, run `type -a codex-team`. If an old shell function or alias
 appears before the managed launcher, unset it for the current shell and remove its
 legacy block from the shell profile manually; the installer will never modify a
-shell profile. A static `multi_agent` feature report does not prove native
-custom-agent selection or identity attestation: missing agent type, agent/thread
-id, effective model, or reasoning effort must fail closed.
+shell profile. A static multi_agent feature report is not proof of native custom-agent selection or identity attestation: missing requested custom-agent name, agent/thread id, effective model, or reasoning effort must fail closed.
 
 Use the installed project-local scheduler for durable task routing and lifecycle operations. This Skill stores no task data, grants no role additional authority, and never edits scheduler JSON directly.
 
@@ -65,7 +63,7 @@ R advice or gate-failure evidence, the smallest recorded writable scope, and
 Team startup must select the configured native custom-agent name explicitly and use
 `fork_turns=none`. Prompt text or a role TOML read by a generic worker is not
 runtime identity attestation. Identity attestation is assembled by the parent, not self-reported by the child. The parent-visible native spawn receipt supplies
-the requested agent type and agent/thread id; the selected TOML supplies the
+the `requested_custom_agent_name` field and agent/thread id; the selected TOML supplies the
 worker id, fixed model, and reasoning effort. `task_id` is scheduler correlation supplied by the parent, not a native spawn-receipt field. The parent verifies this
 evidence against the TOML contract and sends the attestation into the same child
 thread. A child cannot independently read its parent-visible spawn receipt, so missing child self-report is not a failure. Missing or conflicting parent evidence
@@ -77,13 +75,12 @@ writable scope, goal, and acceptance boundary stable for same-task continuation.
 If the same task's native child is still open, continue it with `send_input` so the worker retains the relevant task context. If it was closed, create a fresh
 native child with the same exact role and `fork_turns=none`, then provide a
 bounded handoff containing live task status, evidence, the latest receipt or
-verdict, unresolved acceptance items, and the next command. For unrelated work, spawn a fresh exact-role child with `fork_turns=none` and do not import prior chat history merely because the worker role matches.
+verdict, unresolved acceptance items, and the next command. If the new work is unrelated, spawn a fresh exact-role child with `fork_turns=none` and do not import prior chat history merely because the worker role matches.
 
 ## Role execution boundaries
 
 For A/B/C/D, use the mapped persistent worker id for `next`, then claim and
-describe only the assigned task. Model escalation does not change the worker id,
-task id, writable scope, or acceptance criteria. Continue unfinished work in the
+describe only the assigned task. Model escalation does not change the worker id, task id, writable scope, or acceptance criteria. Continue unfinished work in the
 same scope under the same task id; create new work only when a terminal boundary,
 authorization, conflict domain, or writable surface changes.
 

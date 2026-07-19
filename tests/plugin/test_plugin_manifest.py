@@ -69,6 +69,8 @@ def test_that_skill_preserves_the_full_generic_staff_execution_contract() -> Non
         "role-C -> `.codex/agents/window_c.toml` -> `name=window_c`",
         "role-D -> `.codex/agents/window_d.toml` -> `name=window_d`",
         "Identity attestation is assembled by the parent, not self-reported by the child",
+        "requested_custom_agent_name",
+        "A static multi_agent feature report is not proof of native custom-agent selection or identity attestation",
         "`task_id` is scheduler correlation supplied by the parent",
         "missing child self-report is not a failure",
         "claim --task <task_id> --worker role-r",
@@ -78,7 +80,8 @@ def test_that_skill_preserves_the_full_generic_staff_execution_contract() -> Non
         "metadata.team_mode.kind=pm_fallback",
         "claim --task <task_id> --worker role-p",
         "If the same task's native child is still open, continue it with `send_input`",
-        "spawn a fresh exact-role child with `fork_turns=none` and do not import prior chat history",
+        "If the new work is unrelated, spawn a fresh exact-role child with `fork_turns=none` and do not import prior chat history",
+        "Model escalation does not change the worker id, task id",
     ):
         assert mapping in skill
 
