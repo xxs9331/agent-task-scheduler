@@ -152,7 +152,7 @@ def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis(
         content = path.read_text(encoding="utf-8")
         assert "install_codex_team.py" in content
         assert "type -a codex-team" in content
-        assert "0.3.6" in content
+        assert "0.3.7" in content
 
 
 def test_that_doctor_and_start_do_not_treat_static_features_as_native_attestation() -> (

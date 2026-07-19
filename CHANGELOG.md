@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 0.3.7
+
+- Replaced generated role stubs with packaged canonical six-role TOML contracts,
+  including PM fallback authorization, read-only R boundaries, and executor
+  same-task continuation boundaries.
+- Shipped fail-closed `reconcile_handoff.py` and merged its staff and scheduler
+  reconciliation semantics into the portable Skill.
+- Made the two-level launcher package carry exactly one non-recursive core wheel.
+
 ### 0.3.6
 
 - Merged generic Codex Team startup, native role attestation, thread continuity,
@@ -9,8 +18,8 @@
 - Renamed the project-installed Skill to `codex-team` while retaining
   `global-scheduler` as the marketplace installation compatibility name.
 - Documented transactional migration to `.agents/skills/codex-team`, including
-  removal of legacy `global-scheduler`, `codex-team-staff`, and
-  `parlant-staff-shorthand` project Skills after successful validation.
+  removal of legacy `global-scheduler` and `codex-team-staff` project Skills
+  after successful validation.
 
 ### 0.3.5
 

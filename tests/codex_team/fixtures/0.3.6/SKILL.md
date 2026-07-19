@@ -15,7 +15,7 @@ directory. Do not ask the user to locate a plugin cache or clone this repository
 python scripts/install_codex_team.py
 ```
 
-The installer uses the bundled 0.3.7 wheel, creates a private user environment, and
+The installer uses the bundled 0.3.6 wheel, creates a private user environment, and
 places `codex-team` in the standard user bin directory. It emits one JSON receipt
 and never edits shell profiles or PATH. If the receipt says the bin is not on
 PATH, show its one-time path hint, then use `codex-team init`, `codex-team doctor`,
@@ -38,75 +38,34 @@ The portable topology is one thin root, one persistent product manager, and five
 staff roles. Use the project TOML `name` as the native selector and the lowercase
 worker id only for scheduler lifecycle commands:
 
-- role-P -> `.codex/agents/product_manager.toml` -> `name=product_manager`, worker `product_manager`
-- role-R -> `.codex/agents/researcher.toml` -> `name=researcher`, worker `role-r`
-- role-A -> `.codex/agents/window_a.toml` -> `name=window_a`, worker `role-a`
-- role-B -> `.codex/agents/window_b.toml` -> `name=window_b`, worker `role-b`
-- role-C -> `.codex/agents/window_c.toml` -> `name=window_c`, worker `role-c`
-- role-D -> `.codex/agents/window_d.toml` -> `name=window_d`, worker `role-d`
+- role-P: `product_manager`, worker `product_manager`
+- role-A: `window_a`, worker `role-a`
+- role-B: `window_b`, worker `role-b`
+- role-C: `window_c`, worker `role-c`
+- role-D: `window_d`, worker `role-d`
+- role-R: `researcher`, worker `role-r`
 
 The root native-spawns the product manager at depth 1. The product manager owns
 authorized publication and coordinates A/B/C/D/R at depth 2; depth-2 staff do not
 spawn another level. A/B/C/D execute only bounded authorized work and cannot
 publish. R is read-only for research and gate review and cannot implement or
-publish. The product manager does not claim ordinary executor work and does not claim ordinary tasks.
-
-Direct boss prompts authorize bounded execution but are not scheduler tasks.
-Executors A/B/C/D retain their worker id, task boundary, writable scope, and
-acceptance criteria for same-task continuation; they do not publish, route, or
-manage work for another role. R is read-only by default and must not implement,
-edit code/data, run generation or business evaluations, or self-approve PM
-fallback work. PM fallback is exceptional: it requires explicit boss approval,
-R advice or gate-failure evidence, the smallest recorded writable scope, and
-`fallback_authorization` containing `original_task_id`, `blocking_evidence`,
-`model_escalation_attempted`, `user_authorization`, `r_evidence`,
-`writable_scope`, and `return_gate_task_id`.
+publish. The product manager does not claim ordinary executor work.
 
 Team startup must select the configured native custom-agent name explicitly and use
 `fork_turns=none`. Prompt text or a role TOML read by a generic worker is not
-runtime identity attestation. Identity attestation is assembled by the parent, not self-reported by the child. The parent-visible native spawn receipt supplies
-the requested agent type and agent/thread id; the selected TOML supplies the
-worker id, fixed model, and reasoning effort. `task_id` is scheduler correlation supplied by the parent, not a native spawn-receipt field. The parent verifies this
-evidence against the TOML contract and sends the attestation into the same child
-thread. A child cannot independently read its parent-visible spawn receipt, so missing child self-report is not a failure. Missing or conflicting parent evidence
-fails closed; a generic worker that merely reads a TOML must not claim the mapped
-custom-agent identity.
+runtime identity attestation. The parent must verify the native spawn receipt's
+requested agent type, agent/thread id, effective model, reasoning effort, and
+worker/task correlation against the configured role contract, then send the
+attestation into the same coordinator thread. Missing or conflicting native
+evidence fails closed; a child must not invent parent-visible fields.
 
 Use one persistent worker per configured role and keep the worker id, task id,
 writable scope, goal, and acceptance boundary stable for same-task continuation.
-If the same task's native child is still open, continue it with `send_input` so the worker retains the relevant task context. If it was closed, create a fresh
-native child with the same exact role and `fork_turns=none`, then provide a
-bounded handoff containing live task status, evidence, the latest receipt or
-verdict, unresolved acceptance items, and the next command. For unrelated work, spawn a fresh exact-role child with `fork_turns=none` and do not import prior chat history merely because the worker role matches.
-
-## Role execution boundaries
-
-For A/B/C/D, use the mapped persistent worker id for `next`, then claim and
-describe only the assigned task. Model escalation does not change the worker id,
-task id, writable scope, or acceptance criteria. Continue unfinished work in the
-same scope under the same task id; create new work only when a terminal boundary,
-authorization, conflict domain, or writable surface changes.
-
-role-R may claim only read-only research, review, or gate tasks. Use:
-
-`<project-local-scheduler> --project-root <project-root> claim --task <task_id> --worker role-r`
-
-Role-R must not implement or publish tasks. The claimed worker prompt must grant
-no implementation or publication authority; gate lifecycle follows the task.
-
-Role-P normally publishes authorized task definitions and does not claim ordinary
-tasks. Exceptional implementation fallback uses `role-p` only when
-`metadata.team_mode.kind=pm_fallback` and complete `fallback_authorization`
-metadata are present. Claim it only with:
-
-`<project-local-scheduler> --project-root <project-root> claim --task <task_id> --worker role-p`
-
-Fallback authorization records `original_task_id`, `blocking_evidence`,
-`model_escalation_attempted`, `user_authorization`, `r_evidence`,
-`writable_scope`, and `return_gate_task_id`; it remains within the smallest
-authorized writable scope and returns to independent Role-R review. Do not use
-fallback to replace an eligible A/B/C/D continuation, model escalation, or
-same-domain reassignment.
+If the child thread remains open, continue it with the same thread. If it was
+closed, create a fresh native child with the same role and `fork_turns=none`,
+then provide a bounded handoff containing live task status, evidence, the latest
+receipt or verdict, unresolved acceptance items, and the next command. Do not
+reuse a role's history for unrelated work.
 
 When a child turn ends, reconcile the durable task state before reporting success:
 stop its heartbeat, run `describe`, and require terminal `done` status, a
@@ -114,11 +73,6 @@ non-empty summary, a matching lifecycle receipt, and task verification evidence.
 Child completion with a still-running task is an early exit or orphan candidate,
 not success. Keep at most one live child per worker and serialize overlapping
 writable scopes.
-
-The installed Skill ships `scripts/reconcile_handoff.py` for fail-closed,
-machine-readable reconciliation of the parent spawn attestation, project TOML
-role contract, scheduler `describe` output, terminal lifecycle receipt, and
-verification evidence. It is a verifier, not a grant of role authority.
 
 ## Core invariants
 
@@ -159,6 +113,7 @@ This Skill does not authorize business-code edits, datasets, external writes, de
 
 Project installation uses exactly `.agents/skills/codex-team`. During a successful
 transactional upgrade, remove the legacy project Skills
-`.agents/skills/global-scheduler` and `.agents/skills/codex-team-staff` only
-after the new Codex Team Skill is validated and committed. If validation or
-commit fails, roll back the managed files and retain the legacy Skills.
+`.agents/skills/global-scheduler`, `.agents/skills/codex-team-staff`, and
+`.agents/skills/parlant-staff-shorthand` only after the new Codex Team Skill is
+validated and committed. If validation or commit fails, roll back the managed
+files and retain the legacy Skills.

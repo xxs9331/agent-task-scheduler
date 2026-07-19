@@ -165,15 +165,11 @@ def test_that_init_upgrades_existing_agent_toml_to_the_common_latest_template(
     manager = project / ".codex" / "agents" / "product_manager.toml"
     content = manager.read_text(encoding="utf-8")
     content = content.replace(
-        'description = "Portable Codex team role-P."',
+        'description = "Rescue coordinator, plan owner, and authorized scheduler publisher."',
         'description = "Project-specific plan owner."',
     )
     content = content.replace(
-        'nickname_candidates = ["role-P"]',
-        'nickname_candidates = ["PM", "Product Manager"]',
-    )
-    content = content.replace(
-        "Publish only authorized work; reconcile scheduler receipts; use send_input only for an open same-task child and never resume a closed child.",
+        "Own plan interpretation, priorities, dependencies, conflict domains, capacity exceptions, gate routing, and authorized task publication.",
         "Preserve stricter project-specific publication and fallback boundaries.",
     )
     manager.write_text(content, encoding="utf-8")
@@ -185,6 +181,62 @@ def test_that_init_upgrades_existing_agent_toml_to_the_common_latest_template(
     receipt = json.loads(capsys.readouterr().out)
     assert ".codex/agents/product_manager.toml" in receipt["updated"]
     assert manager.read_text(encoding="utf-8") != content
+    assert main(["doctor", str(project)]) == 0
+
+
+def test_that_init_installs_the_canonical_full_role_contracts_and_reconciler(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "canonical team"
+
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+
+    canonical = (
+        Path(__file__).parents[2]
+        / "src"
+        / "agent_task_scheduler"
+        / "codex_team"
+        / "assets"
+        / "team-config"
+        / ".codex"
+        / "agents"
+    )
+    installed = project / ".codex" / "agents"
+    for template in canonical.glob("*.toml"):
+        assert (installed / template.name).read_text(encoding="utf-8") == template.read_text(
+            encoding="utf-8"
+        )
+
+    manager = (installed / "product_manager.toml").read_text(encoding="utf-8")
+    researcher = (installed / "researcher.toml").read_text(encoding="utf-8")
+    executor = (installed / "window_a.toml").read_text(encoding="utf-8")
+    assert "fallback_authorization" in manager
+    assert "original_task_id" in manager
+    assert "Read-only by default" in researcher
+    assert "Do not implement, edit code/data" in researcher
+    assert "Continue unfinished work in the same scope under the same task id" in executor
+    assert "Never publish, create, assign, route, resume, retry" in executor
+
+    skill = project / ".agents" / "skills" / "codex-team"
+    assert (skill / "scripts" / "reconcile_handoff.py").is_file()
+    skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
+    assert "Direct boss prompts authorize bounded execution but are not scheduler tasks" in skill_text
+    assert "reconcile_handoff.py" in skill_text
+
+
+def test_that_init_transactionally_upgrades_a_stock_036_skill_to_037(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "0.3.6 project"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.6")
+
+    assert main(["init", str(project)]) == 0
+
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["upgraded_from"] == "0.3.6"
+    assert receipt["upgraded_to"] == "0.3.7"
+    assert not (skill.parent / "codex-team.backup").exists()
     assert main(["doctor", str(project)]) == 0
 
 
@@ -333,7 +385,6 @@ def test_that_init_installs_exactly_one_unified_team_mode_skill(
     for legacy in (
         "global-scheduler",
         "codex-team-staff",
-        "parlant-staff-shorthand",
     ):
         assert not (skills / legacy).exists()
 
@@ -346,7 +397,7 @@ def test_that_init_merges_and_removes_legacy_scheduler_and_staff_skills(
     capsys.readouterr()
     skills = project / ".agents" / "skills"
     (skills / "codex-team").rename(skills / "global-scheduler")
-    for legacy in ("codex-team-staff", "parlant-staff-shorthand"):
+    for legacy in ("codex-team-staff",):
         root = skills / legacy
         root.mkdir()
         (root / "SKILL.md").write_text(f"legacy {legacy}\n", encoding="utf-8")
@@ -356,7 +407,6 @@ def test_that_init_merges_and_removes_legacy_scheduler_and_staff_skills(
     assert receipt["removed_legacy_skills"] == [
         ".agents/skills/codex-team-staff",
         ".agents/skills/global-scheduler",
-        ".agents/skills/parlant-staff-shorthand",
     ]
     assert (skills / "codex-team" / "SKILL.md").is_file()
     assert main(["doctor", str(project)]) == 0
@@ -370,7 +420,7 @@ def test_that_failed_merge_restores_all_legacy_team_mode_skills(
     capsys.readouterr()
     skills = project / ".agents" / "skills"
     (skills / "codex-team").rename(skills / "global-scheduler")
-    for legacy in ("codex-team-staff", "parlant-staff-shorthand"):
+    for legacy in ("codex-team-staff",):
         root = skills / legacy
         root.mkdir()
         (root / "SKILL.md").write_text(f"legacy {legacy}\n", encoding="utf-8")
@@ -395,7 +445,6 @@ def test_that_failed_merge_restores_all_legacy_team_mode_skills(
 _LEGACY_SKILL_NAMES_FOR_TEST = (
     "codex-team-staff",
     "global-scheduler",
-    "parlant-staff-shorthand",
 )
 
 
@@ -418,7 +467,7 @@ def test_that_init_replaces_an_existing_skill_with_an_unreadable_old_wheel(
 
 
 @pytest.mark.parametrize(
-    "legacy_version", ["0.3.1", "0.3.2", "0.3.3", "0.3.4", "0.3.5"]
+    "legacy_version", ["0.3.1", "0.3.2", "0.3.3", "0.3.4", "0.3.5", "0.3.6"]
 )
 def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     tmp_path: Path, capsys, legacy_version: str
@@ -428,7 +477,7 @@ def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     assert main(["init", str(project)]) == 0
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == legacy_version
-    assert receipt["upgraded_to"] == "0.3.6"
+    assert receipt["upgraded_to"] == "0.3.7"
     assert main(["doctor", str(project)]) == 0
     assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
     assert not (project / ".agents" / "skills" / "codex-team.backup").exists()
@@ -455,7 +504,7 @@ def test_that_init_replaces_a_modified_managed_legacy_skill(
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     (skill / "SKILL.md").write_text("modified", encoding="utf-8")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.6"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.7"
     assert (skill / "SKILL.md").read_text(encoding="utf-8") != "modified"
 
 
@@ -511,7 +560,7 @@ def test_that_init_ignores_transient_pycache_when_migrating_stock_legacy(
     cache.mkdir()
     (cache / "install.cpython-312.pyc").write_bytes(b"transient")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.6"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.7"
 
 
 def test_that_init_rolls_back_a_partial_skill_copy_failure(
@@ -698,7 +747,7 @@ def test_that_doctor_rejects_a_renamed_wheel_with_mismatched_metadata(
         / "skills"
         / "codex-team"
         / "assets"
-        / "agent_task_scheduler-0.3.6-py3-none-any.whl",
+        / "agent_task_scheduler-0.3.7-py3-none-any.whl",
         wheel,
     )
 

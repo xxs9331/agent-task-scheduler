@@ -19,16 +19,17 @@ _ROLES = {
     "role-D": ("role-d", "window_d"),
     "role-R": ("role-r", "researcher"),
 }
-_AGENTS = {"product_manager", *[agent for _, agent in _ROLES.values()]}
-_MODELS = {
-    "product_manager": ("gpt-5.6-sol", "high"),
-    "researcher": ("gpt-5.6-terra", "medium"),
-    "window_a": ("gpt-5.6-terra", "medium"),
-    "window_b": ("gpt-5.6-terra", "low"),
-    "window_c": ("gpt-5.6-luna", "medium"),
-    "window_d": ("gpt-5.6-luna", "medium"),
-}
-_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.6-py3-none-any.whl"
+_CANONICAL_AGENT_FILES = frozenset(
+    {
+        "product_manager.toml",
+        "researcher.toml",
+        "window_a.toml",
+        "window_b.toml",
+        "window_c.toml",
+        "window_d.toml",
+    }
+)
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.7-py3-none-any.whl"
 _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     {
         "agent_task_scheduler-0.3.1-py3-none-any.whl",
@@ -36,10 +37,11 @@ _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
         "agent_task_scheduler-0.3.3-py3-none-any.whl",
         "agent_task_scheduler-0.3.4-py3-none-any.whl",
         "agent_task_scheduler-0.3.5-py3-none-any.whl",
+        "agent_task_scheduler-0.3.6-py3-none-any.whl",
     }
 )
 _SUPPORTED_SKILL_WHEELS = {
-    _BUNDLED_WHEEL_NAME: "0.3.6",
+    _BUNDLED_WHEEL_NAME: "0.3.7",
     **{wheel: wheel.split("-")[1] for wheel in _SUPPORTED_LEGACY_WHEEL_NAMES},
 }
 _REQUIRED_SKILL_FILES = (
@@ -51,7 +53,6 @@ _SKILL_NAME = "codex-team"
 _LEGACY_SKILL_NAMES = (
     "codex-team-staff",
     "global-scheduler",
-    "parlant-staff-shorthand",
 )
 _NATIVE_ATTESTATION_NOTE = (
     "Static multi_agent feature status is not native custom-agent attestation. "
@@ -256,7 +257,7 @@ def _init(root: Path) -> dict[str, object]:
     for legacy_backup in legacy_backups:
         if legacy_backup.exists():
             shutil.rmtree(legacy_backup)
-    upgraded_to = "0.3.6" if skill_existed and replaced_skill else None
+    upgraded_to = "0.3.7" if skill_existed and replaced_skill else None
     return {
         "ok": True,
         "operation": "init",
@@ -369,9 +370,24 @@ def _expected_files() -> dict[str, str]:
         ".codex/config.toml": 'model = "gpt-5.6-luna"\nmodel_reasoning_effort = "medium"\n\n[agents]\nmax_threads = 6\nmax_depth = 2\ninterrupt_message = true\n',
         ".codex/team-handoff.md": "# Codex Team Handoff\n\nThis project uses the portable project-local Codex team topology.\n",
     }
-    for agent in sorted(_AGENTS):
-        files[f".codex/agents/{agent}.toml"] = _agent_toml(agent)
+    for template in _canonical_team_templates():
+        files[f".codex/agents/{template.name}"] = template.read_text(encoding="utf-8")
     return files
+
+
+def _team_config_source() -> Path:
+    """Return the packaged canonical custom-agent contracts."""
+    return Path(__file__).parent / "assets" / "team-config" / ".codex" / "agents"
+
+
+def _canonical_team_templates() -> tuple[Path, ...]:
+    """Return exactly the supported full-role TOML template set."""
+    source = _team_config_source()
+    templates = tuple(sorted(source.glob("*.toml")))
+    names = {template.name for template in templates}
+    if names != _CANONICAL_AGENT_FILES or any(not template.is_file() for template in templates):
+        raise RuntimeError("packaged canonical role template set is incomplete or invalid")
+    return templates
 
 
 def _skill_source() -> Path:
@@ -400,7 +416,7 @@ def _skill_status(skill_root: Path) -> tuple[str, str | None]:
             )
         except (OSError, json.JSONDecodeError):
             return "invalid", wheel_name
-        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.6":
+        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.7":
             return "invalid", wheel_name
         source = _skill_source().resolve()
         if skill_root.resolve() != source and not _same_skill_tree(skill_root, source):
@@ -491,37 +507,6 @@ def _same_skill_tree(target: Path, source: Path) -> bool:
         target_files[relative].read_bytes() == source_path.read_bytes()
         for relative, source_path in source_files.items()
     )
-
-
-def _agent_toml(agent: str) -> str:
-    role = next(
-        (label for label, (_, name) in _ROLES.items() if name == agent), "role-P"
-    )
-    worker = next(
-        (worker for worker, name in _ROLES.values() if name == agent), "product_manager"
-    )
-    model, effort = _MODELS[agent]
-    return (
-        f'name = "{agent}"\n'
-        f'description = "Portable Codex team {role}."\n'
-        f'nickname_candidates = ["{role}"]\n'
-        f'model = "{model}"\n'
-        f'model_reasoning_effort = "{effort}"\n\n'
-        'developer_instructions = """\n'
-        f"You are {role} for the current project. worker_id={worker}.\n"
-        "Read this project handoff, CLAUDE.md, AGENTS.md, this TOML, and the unified codex-team Skill.\n"
-        "Use only the current project. Prompt text is not runtime identity attestation.\n"
-        f"{_responsibilities(agent)}\n"
-        '"""\n'
-    )
-
-
-def _responsibilities(agent: str) -> str:
-    if agent == "product_manager":
-        return "Publish only authorized work; reconcile scheduler receipts; use send_input only for an open same-task child and never resume a closed child."
-    if agent == "researcher":
-        return "Remain read-only; review assigned gates and use complete for pass or block for needs-fix. Do not publish or implement."
-    return "Claim only assigned executor work; perform RED, GREEN, verification, then complete --summary. Do not publish or manage another role."
 
 
 def _compatible(path: Path, expected: str) -> bool:
