@@ -21,7 +21,7 @@ does not—and must not claim to—have a post-install hook. Restart Codex, then
 it in any project to “install codex-team and bootstrap team mode.” The Skill runs
 its own relative `scripts/install_codex_team.py`; the user never needs to clone
 this repository, copy files, or discover a plugin-cache path. The installer uses
-the bundled 0.3.4 wheel to create a private user environment and managed launcher,
+the bundled 0.3.5 wheel to create a private user environment and managed launcher,
 emits a JSON receipt, and never edits PATH, shell profiles, or plugin files. If
 the receipt says the bin directory is absent from PATH, apply its one-time hint in
 the current shell. After installation, run `type -a codex-team`; if an old shell
@@ -32,6 +32,13 @@ the fresh root must verify the requested agent type, spawn agent/thread id, and 
 fixed model/reasoning contract from parent-visible native evidence. It then sends
 that attestation to the same `product_manager` thread. A child is not required to
 self-report parent-only fields; missing parent evidence still fails closed.
+
+Every project uses the one latest team configuration and Skill bundled with
+`codex-team`. `doctor` requires the managed configuration to be semantically
+identical to the current template. `init` transactionally upgrades a differing
+older configuration and Skill to 0.3.5. Bare `codex-team`/`start` performs this
+upgrade before launching Codex; a failed upgrade rolls back the managed files
+and never invokes Codex.
 
 Then run these commands from the target project:
 
@@ -49,10 +56,11 @@ codex-team init "/work/my project"
 codex-team role-A "/work/my project"
 ```
 
-`init` writes only project-local `.codex/`, `.agents/skills/`, and scheduler
-bootstrap files. It lists conflicts and refuses to overwrite differing content.
-`doctor` verifies only static files; it cannot attest runtime native identity.
-After doctor succeeds, `start` invokes `codex -C <target-project>` and requests
+`init` manages only project-local `.codex/`, `.agents/skills/`, and scheduler
+bootstrap files and reports separate `created`, `updated`, and Skill migration
+fields. `doctor` verifies only static files; it cannot attest runtime native
+identity. After auto-upgrade and doctor succeed, `start` invokes
+`codex -C <target-project>` and requests
 a new `product_manager` with `fork_turns=none`. `role-A/B/C/D/R` map to native
 `window_a/window_b/window_c/window_d/researcher` and lowercase scheduler worker
 ids `role-a...role-r`.

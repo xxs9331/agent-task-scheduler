@@ -1,0 +1,108 @@
+# Global Scheduler Skill (v1)
+
+This Skill is distributable instructions for an installed `agent-task-scheduler` CLI. It stores no task data and never edits JSON state directly.
+
+## Initialize a managed project
+
+```bash
+mkdir -p .scheduler
+cat > .scheduler/project.json <<'JSON'
+{"config_schema_version":1,"project_id":"my-project","state_path":".scheduler/state.json","events_path":null}
+JSON
+scheduler --project-root "$PWD" status
+```
+
+Use an explicit `--project-root` when operating from outside the project. Without it, the CLI searches the current directory and parents for `.scheduler/project.json`; it never falls back to a global task pool.
+
+## Verified CLI surface
+
+The global option is accepted before the command:
+
+```text
+scheduler [--project-root PATH] COMMAND
+```
+
+The verified command and argument contract is:
+
+| Command | Arguments |
+|---|---|
+| `status`, `ready`, `release-expired` | none |
+| `next` | `--worker WORKER` |
+| `describe` | `--task TASK_ID` |
+| `claim`, `heartbeat`, `continue` | `--task TASK_ID --worker WORKER` |
+| `block`, `fail` | `--task TASK_ID --worker WORKER --reason TEXT` |
+| `complete` | `--task TASK_ID --worker WORKER [--summary TEXT]` |
+| `retry`, `resume` | `--task TASK_ID --worker WORKER --reason TEXT --last-attempt-summary TEXT --next-attempt-instruction TEXT` |
+| `publish` | `--from-file FILE [--update]` |
+| `migrate` | `[--check | --dry-run]` |
+
+`publish` requires `--from-file`; `--update` selects update mode. `migrate`
+accepts at most one of `--check` and `--dry-run`. The lifecycle commands use
+the task/worker names above and emit one JSON receipt on stdout.
+
+Successful publish receipts have this shape:
+
+```json
+{"ok":true,"operation":"publish","changed_task_ids":["task-a"],"warnings":[],"project":{"project_id":"demo","root":"/abs/project"}}
+```
+
+Update uses `operation: "publish_update"`. Migration uses
+`operation: "migrate"`, `changed_task_ids: []`, and places source/target
+versions and change details under `migration`. A committed state with an
+observation-log failure remains `ok: true` and carries an
+`OBSERVATION_LOG_WARNING` in `warnings`. Failures use exit code 1 and the
+stable `error.code`/`error.message` envelope.
+
+## Publish
+
+Save the strict envelope in a caller-owned file, then run:
+
+```bash
+scheduler --project-root "$PWD" publish --from-file publish.json
+scheduler --project-root "$PWD" next
+```
+
+The envelope must contain `input_schema_version: 1`, matching `project_id`, an `operation` discriminator, and a non-empty `tasks` array. For `operation: "create"`, each task needs `task_id`, `agent_type`, `depends_on`, `conflict_domain`, `preferred_worker`, and object `worker_prompt`. For `operation: "update"`, each item is exactly `{ "task_id": "...", "patch": { ... } }`; `patch` is non-empty and limited to the mutable-field whitelist in the schema. Unknown fields, runtime fields (`status`, `created_at`, owner, lease, attempt), duplicate IDs, invalid dependencies, and project mismatch fail without a partial write.
+
+For an existing `ready` or `blocked_waiting_dependency` task, use the explicit update mode and only the documented patch fields:
+
+```bash
+scheduler --project-root "$PWD" publish --update --from-file patch.json
+```
+
+The CLI mode and file discriminator must agree. Without `--update`, the file must contain `operation: "create"`; with `--update`, it must contain `operation: "update"`. Both mismatch directions fail with `PUBLISH_OPERATION_MISMATCH`, `ok: false`, and no state write. Keep the discriminator in the file even though the CLI flag selects the mode so saved inputs remain self-describing.
+
+Updates cannot replace a task or change runtime/history fields. Claimed, running, or terminal tasks are not update targets. The CLI validates the full resulting dependency graph before writing.
+
+## Legacy state migration
+
+Parlant legacy state is adapted into strict canonical state in this order: parse bytes; identify supported legacy shape/version; validate project/path identity; map root and task fields; apply only documented defaults (`publish_history: []` when absent); validate dependencies and task invariants; validate against `state.schema.json`; then lock and atomically replace. Any failure leaves the original bytes unchanged. The migration receipt reports source format/version, target version, mapped counts, defaults, and warnings.
+
+If state commits but optional JSONL observation logging fails, treat the result as successful:
+
+```json
+{"ok":true,"operation":"publish","warnings":[{"code":"OBSERVATION_LOG_WARNING","message":"state committed; observation log append failed","rebuild_from":"publish_history"}]}
+```
+
+`publish_history` is authoritative and can reconstruct the observation log.
+
+## Verify routing and recover
+
+`next` returns JSON. If no task is routable, inspect `blocked_candidates` and its dependency, conflict-domain, or worker-profile reason; do not infer readiness from an empty task alone. For failures, preserve the JSON error code and state bytes, correct the caller-owned input or project configuration, and retry. `LOCK_TIMEOUT` requires waiting or investigating another writer. `OBSERVATION_LOG_WARNING` means state is authoritative and history can reconstruct the optional log.
+
+## Migration
+
+Run `migrate --check` or `migrate --dry-run` before a real migration. A dry run is read-only. A real migration is lock-protected and atomic; verify the receipt's source version, target version, and change summary.
+
+The schema-validation tests require the repository's declared `test`
+dependency group. Run the complete suite with:
+
+```bash
+uv run --group test pytest -q
+```
+
+Do not rely on an ad-hoc `uv run --with jsonschema` override.
+
+## Safety boundary
+
+Do not use this Skill to modify Task Center UI/API, runtime/business logic, datasets, external systems, MCP integrations, network-filesystem locking, or historical publish scripts. Do not declare a gate pass; only the read-only research role may issue gate decisions.

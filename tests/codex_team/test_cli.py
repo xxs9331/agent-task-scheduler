@@ -54,6 +54,7 @@ def test_that_fresh_root_prompt_forbids_recursive_launcher_commands(
     assert "nested Codex" in prompt
     assert "product_manager" in prompt
     assert "fork_turns=none" in prompt
+    assert ".codex/TEAM_MODE_V2_PM_HANDOFF.md" in prompt
 
 
 def test_that_fresh_root_requires_parent_side_native_attestation_before_pm_handoff(
@@ -100,22 +101,22 @@ def test_that_a_bare_project_path_starts_the_resolved_project(
     assert arguments[:2] == ["-C", str(project.resolve())]
 
 
-def test_that_start_fails_closed_before_init_without_invoking_codex(
+def test_that_start_bootstraps_an_uninitialized_project_before_invoking_codex(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
     project = tmp_path / "uninitialized"
     project.mkdir()
     _install_fake_codex(tmp_path, monkeypatch)
 
-    assert main(["start", str(project)]) == 2
+    assert main(["start", str(project)]) == 0
 
     receipt = json.loads(capsys.readouterr().out)
-    assert receipt["code"] == "CODEX_TEAM_NOT_INITIALIZED"
-    assert "codex-team init" in receipt["message"]
-    assert not (tmp_path / "codex-arguments.json").exists()
+    assert receipt["ok"] is True
+    assert (tmp_path / "codex-arguments.json").exists()
+    assert main(["doctor", str(project)]) == 0
 
 
-def test_that_init_is_idempotent_but_rejects_conflicting_configuration(
+def test_that_init_is_idempotent_and_upgrades_conflicting_common_configuration(
     tmp_path: Path, capsys
 ) -> None:
     project = tmp_path / "safe project"
@@ -125,14 +126,16 @@ def test_that_init_is_idempotent_but_rejects_conflicting_configuration(
     capsys.readouterr()
     (project / ".codex" / "config.toml").write_text("model = 'other'\n")
 
-    assert main(["init", str(project)]) == 2
+    assert main(["init", str(project)]) == 0
 
     receipt = json.loads(capsys.readouterr().out)
-    assert receipt["code"] == "CODEX_TEAM_CONFLICT"
-    assert ".codex/config.toml" in receipt["conflicts"]
+    assert ".codex/config.toml" in receipt["updated"]
+    assert "model = 'other'" not in (project / ".codex" / "config.toml").read_text(
+        encoding="utf-8"
+    )
 
 
-def test_that_init_accepts_semantically_equivalent_toml_with_safe_project_fields(
+def test_that_init_removes_extra_fields_from_the_common_configuration(
     tmp_path: Path, capsys
 ) -> None:
     project = tmp_path / "equivalent"
@@ -145,7 +148,127 @@ def test_that_init_accepts_semantically_equivalent_toml_with_safe_project_fields
     )
 
     assert main(["init", str(project)]) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    assert ".codex/config.toml" in receipt["updated"]
+    assert "project_note" not in config.read_text(encoding="utf-8")
     assert main(["doctor", str(project)]) == 0
+
+
+def test_that_init_upgrades_existing_agent_toml_to_the_common_latest_template(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "existing team"
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    manager = project / ".codex" / "agents" / "product_manager.toml"
+    content = manager.read_text(encoding="utf-8")
+    content = content.replace(
+        'description = "Portable Codex team role-P."',
+        'description = "Project-specific plan owner."',
+    )
+    content = content.replace(
+        'nickname_candidates = ["role-P"]',
+        'nickname_candidates = ["PM", "Product Manager"]',
+    )
+    content = content.replace(
+        "Publish only authorized work; reconcile scheduler receipts; use send_input only for an open same-task child and never resume a closed child.",
+        "Preserve stricter project-specific publication and fallback boundaries.",
+    )
+    manager.write_text(content, encoding="utf-8")
+
+    assert main(["doctor", str(project)]) == 2
+    capsys.readouterr()
+
+    assert main(["init", str(project)]) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    assert ".codex/agents/product_manager.toml" in receipt["updated"]
+    assert manager.read_text(encoding="utf-8") != content
+    assert main(["doctor", str(project)]) == 0
+
+
+def test_that_doctor_rejects_existing_agent_toml_with_identity_mismatch(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "mismatched team"
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    manager = project / ".codex" / "agents" / "product_manager.toml"
+    manager.write_text(
+        manager.read_text(encoding="utf-8").replace(
+            'model = "gpt-5.6-sol"', 'model = "gpt-5.6-terra"'
+        ),
+        encoding="utf-8",
+    )
+
+    assert main(["doctor", str(project)]) == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert ".codex/agents/product_manager.toml" in receipt["conflicts"]
+
+
+def test_that_init_upgrades_a_complete_older_project_scheduler_skill(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "project managed skill"
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    skill = project / ".agents" / "skills" / "global-scheduler"
+    shutil.rmtree(skill)
+    shutil.copytree(Path(__file__).parent / "fixtures" / "0.3.1", skill)
+    (skill / "scripts" / "install_codex_team.py").unlink()
+    (skill / "references" / "parlant.md").write_text(
+        "# Project scheduler overlay\n", encoding="utf-8"
+    )
+
+    assert main(["doctor", str(project)]) == 2
+    capsys.readouterr()
+
+    assert main(["init", str(project)]) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["upgraded_from"] == "0.3.1"
+    assert main(["doctor", str(project)]) == 0
+    assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
+    assert not (skill / "references" / "parlant.md").exists()
+
+
+def test_that_bare_start_auto_upgrades_older_common_configuration(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "auto upgrade"
+    _install_fake_codex(tmp_path, monkeypatch)
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    manager = project / ".codex" / "agents" / "product_manager.toml"
+    manager.write_text(
+        manager.read_text(encoding="utf-8").replace(
+            'description = "Portable Codex team role-P."',
+            'description = "Previous common template."',
+        ),
+        encoding="utf-8",
+    )
+
+    assert main(["start", str(project)]) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["ok"] is True
+    assert "Previous common template." not in manager.read_text(encoding="utf-8")
+    assert (tmp_path / "codex-arguments.json").is_file()
+
+
+def test_that_doctor_rejects_an_incomplete_project_managed_scheduler_skill(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "incomplete project skill"
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    skill = project / ".agents" / "skills" / "global-scheduler"
+    (skill / "scripts" / "install_codex_team.py").unlink()
+    (skill / "references" / "parlant.md").write_text(
+        "# Project scheduler overlay\n", encoding="utf-8"
+    )
+    (skill / "references" / "contract.md").unlink()
+
+    assert main(["doctor", str(project)]) == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert ".agents/skills/global-scheduler/SKILL.md" in receipt["conflicts"]
 
 
 def test_that_doctor_and_role_start_use_canonical_names_and_native_agent_mapping(
@@ -194,7 +317,7 @@ def test_that_agent_templates_preserve_the_verified_model_matrix(
         assert f'model_reasoning_effort = "{effort}"' in content
 
 
-def test_that_init_rejects_an_existing_skill_with_an_old_bundled_wheel(
+def test_that_init_replaces_an_existing_skill_with_an_unreadable_old_wheel(
     tmp_path: Path, capsys
 ) -> None:
     project = tmp_path / "old skill"
@@ -205,14 +328,14 @@ def test_that_init_rejects_an_existing_skill_with_an_old_bundled_wheel(
         b"old"
     )
 
-    assert main(["init", str(project)]) == 2
+    assert main(["init", str(project)]) == 0
 
     receipt = json.loads(capsys.readouterr().out)
-    assert receipt["code"] == "CODEX_TEAM_CONFLICT"
-    assert ".agents/skills/global-scheduler" in receipt["conflicts"]
+    assert receipt["upgraded_from"] is None
+    assert main(["doctor", str(project)]) == 0
 
 
-@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2", "0.3.3"])
+@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2", "0.3.3", "0.3.4"])
 def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     tmp_path: Path, capsys, legacy_version: str
 ) -> None:
@@ -221,7 +344,7 @@ def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     assert main(["init", str(project)]) == 0
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == legacy_version
-    assert receipt["upgraded_to"] == "0.3.4"
+    assert receipt["upgraded_to"] == "0.3.5"
     assert main(["doctor", str(project)]) == 0
     assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
     assert not (project / ".agents" / "skills" / "global-scheduler.backup").exists()
@@ -241,29 +364,29 @@ def test_that_doctor_fails_closed_when_a_supported_legacy_skill_lacks_its_instal
     assert ".agents/skills/global-scheduler/SKILL.md" in receipt["conflicts"]
 
 
-def test_that_init_rejects_a_modified_managed_legacy_skill(
+def test_that_init_replaces_a_modified_managed_legacy_skill(
     tmp_path: Path, capsys
 ) -> None:
     project = tmp_path / "modified legacy"
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     (skill / "SKILL.md").write_text("modified", encoding="utf-8")
-    assert main(["init", str(project)]) == 2
-    assert json.loads(capsys.readouterr().out)["code"] == "CODEX_TEAM_CONFLICT"
-    assert (skill / "SKILL.md").read_text(encoding="utf-8") == "modified"
+    assert main(["init", str(project)]) == 0
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.5"
+    assert (skill / "SKILL.md").read_text(encoding="utf-8") != "modified"
 
 
-def test_that_init_rejects_a_managed_legacy_skill_with_an_extra_file(
+def test_that_init_replaces_a_managed_legacy_skill_with_an_extra_file(
     tmp_path: Path, capsys
 ) -> None:
     project = tmp_path / "extra legacy"
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.2")
     (skill / "extra.txt").write_text("user", encoding="utf-8")
-    assert main(["init", str(project)]) == 2
-    assert (skill / "extra.txt").read_text(encoding="utf-8") == "user"
+    assert main(["init", str(project)]) == 0
+    assert not (skill / "extra.txt").exists()
 
 
-@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2", "0.3.3"])
-def test_that_init_rejects_a_same_version_wheel_outside_official_variants(
+@pytest.mark.parametrize("legacy_version", ["0.3.1", "0.3.2", "0.3.3", "0.3.4"])
+def test_that_init_replaces_a_same_version_wheel_outside_official_variants(
     tmp_path: Path, capsys, legacy_version: str
 ) -> None:
     project = tmp_path / "unknown same version"
@@ -271,13 +394,11 @@ def test_that_init_rejects_a_same_version_wheel_outside_official_variants(
     wheel = next((skill / "assets").glob("*.whl"))
     with wheel.open("ab") as stream:
         stream.write(b"untrusted-but-valid-zip-trailer")
-    original = _tree_digest(skill)
-
-    assert main(["init", str(project)]) == 2
+    assert main(["init", str(project)]) == 0
 
     receipt = json.loads(capsys.readouterr().out)
-    assert receipt["code"] == "CODEX_TEAM_CONFLICT"
-    assert _tree_digest(skill) == original
+    assert receipt["upgraded_from"] == legacy_version
+    assert main(["doctor", str(project)]) == 0
     assert not (skill.parent / "global-scheduler.backup").exists()
 
 
@@ -309,7 +430,7 @@ def test_that_init_ignores_transient_pycache_when_migrating_stock_legacy(
     cache.mkdir()
     (cache / "install.cpython-312.pyc").write_bytes(b"transient")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.4"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.5"
 
 
 def test_that_init_rolls_back_a_partial_skill_copy_failure(
@@ -318,6 +439,12 @@ def test_that_init_rolls_back_a_partial_skill_copy_failure(
     project = tmp_path / "copy rollback"
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     original = _tree_digest(skill)
+    manager = project / ".codex" / "agents" / "product_manager.toml"
+    old_manager = manager.read_text(encoding="utf-8").replace(
+        'description = "Portable Codex team role-P."',
+        'description = "Previous common template."',
+    )
+    manager.write_text(old_manager, encoding="utf-8")
     real_copytree = shutil.copytree
 
     def partial_copy(source: Path, target: Path, *args, **kwargs) -> Path:
@@ -332,17 +459,117 @@ def test_that_init_rolls_back_a_partial_skill_copy_failure(
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["code"] == "CODEX_TEAM_MIGRATION_FAILED"
     assert _tree_digest(skill) == original
+    assert manager.read_text(encoding="utf-8") == old_manager
     assert not (skill.parent / "global-scheduler.backup").exists()
     monkeypatch.setattr(
         "agent_task_scheduler.codex_team.cli.shutil.copytree", real_copytree
     )
 
 
+def test_that_start_does_not_invoke_codex_when_auto_upgrade_rolls_back(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "failed auto upgrade"
+    _install_fake_codex(tmp_path, monkeypatch)
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
+    (project / ".codex" / "config.toml").write_text("model = 'old'\n")
+
+    def fail_copy(*args, **kwargs) -> Path:
+        raise OSError("copy failed")
+
+    monkeypatch.setattr(
+        "agent_task_scheduler.codex_team.cli.shutil.copytree", fail_copy
+    )
+    assert main(["start", str(project)]) == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_MIGRATION_FAILED"
+    assert not (tmp_path / "codex-arguments.json").exists()
+    assert (skill / "SKILL.md").is_file()
+
+
+def test_that_init_preserves_existing_scheduler_state_when_project_config_is_missing(
+    tmp_path: Path, capsys
+) -> None:
+    project = tmp_path / "scheduler state without config"
+    state = project / ".scheduler" / "state.json"
+    state.parent.mkdir(parents=True)
+    original = b'{"important":"existing-state"}\n'
+    state.write_bytes(original)
+
+    assert main(["init", str(project)]) == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_CONFLICT"
+    assert state.read_bytes() == original
+    assert not (project / ".scheduler" / "project.json").exists()
+    assert not (project / ".codex").exists()
+
+
+def test_that_doctor_and_start_reject_a_corrupt_scheduler_config_without_launching(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "corrupt scheduler config"
+    _install_fake_codex(tmp_path, monkeypatch)
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+    config = project / ".scheduler" / "project.json"
+    state = project / ".scheduler" / "state.json"
+    state.write_bytes(b'{"important":"preserve"}\n')
+    config.write_bytes(b"{not-json\n")
+    original_state = state.read_bytes()
+    original_config = config.read_bytes()
+
+    assert main(["doctor", str(project)]) == 2
+    capsys.readouterr()
+    assert main(["start", str(project)]) == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_CONFLICT"
+    assert state.read_bytes() == original_state
+    assert config.read_bytes() == original_config
+    assert not (tmp_path / "codex-arguments.json").exists()
+
+
+def test_that_fresh_init_removes_all_managed_surfaces_when_installer_fails(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "fresh rollback"
+    monkeypatch.setattr(
+        "agent_task_scheduler.codex_team.cli.subprocess.run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            subprocess.CalledProcessError(1, args)
+        ),
+    )
+
+    assert main(["init", str(project)]) == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["migration"]["rolled_back"] is True
+    for relative in (".codex", ".agents", ".scheduler", ".venv"):
+        assert not (project / relative).exists()
+
+
+def test_that_init_restores_earlier_common_files_when_a_later_write_fails(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "write rollback"
+    real_write_text = Path.write_text
+
+    def fail_on_manager(path: Path, content: str, *args, **kwargs) -> int:
+        if path.name == "product_manager.toml":
+            raise OSError("injected write failure")
+        return real_write_text(path, content, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", fail_on_manager)
+    assert main(["init", str(project)]) == 2
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["code"] == "CODEX_TEAM_MIGRATION_FAILED"
+    assert not (project / ".codex" / "config.toml").exists()
+    assert not (project / ".agents").exists()
+
+
 def test_that_init_rolls_back_when_current_installer_fails(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
     project = tmp_path / "installer rollback"
-    skill = _initialize_with_legacy_skill(project, capsys, "0.3.3")
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.4")
     original = _tree_digest(skill)
     monkeypatch.setattr(
         "agent_task_scheduler.codex_team.cli.subprocess.run",
@@ -370,7 +597,7 @@ def test_that_doctor_fails_closed_for_an_unknown_future_skill_wheel(
     project = tmp_path / "unknown project"
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     wheel = next((skill / "assets").glob("*.whl"))
-    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.5-py3-none-any.whl")
+    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.6-py3-none-any.whl")
 
     assert main(["doctor", str(project)]) == 2
 
@@ -390,7 +617,7 @@ def test_that_doctor_rejects_a_renamed_wheel_with_mismatched_metadata(
         / "skills"
         / "global-scheduler"
         / "assets"
-        / "agent_task_scheduler-0.3.4-py3-none-any.whl",
+        / "agent_task_scheduler-0.3.5-py3-none-any.whl",
         wheel,
     )
 

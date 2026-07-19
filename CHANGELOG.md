@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 0.3.5
+
+- Made the bundled 0.3.5 team configuration and Skill the single canonical
+  managed version for every project.
+- Added transactional replacement of differing older team configuration and
+  Skill files, with explicit created/updated/version receipts and rollback.
+- Made bare `codex-team`/`start` auto-upgrade before launching Codex and refuse
+  to launch when migration or static validation fails.
+
 ### 0.3.4
 
 - Changed fresh-root native identity handoff to use the parent-visible spawn
