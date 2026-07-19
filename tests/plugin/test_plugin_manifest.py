@@ -7,6 +7,24 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[2]
+_PROHIBITED_PROJECT_IDENTIFIERS = ("parlant", "issue12", "/home/lenovo")
+
+
+def _decodable_text_payloads(
+    archive: zipfile.ZipFile,
+    *,
+    excluded_names: set[str] | None = None,
+) -> list[tuple[str, str]]:
+    excluded = excluded_names or set()
+    payloads: list[tuple[str, str]] = []
+    for name in archive.namelist():
+        if name in excluded or name.endswith("/"):
+            continue
+        try:
+            payloads.append((name, archive.read(name).decode("utf-8")))
+        except UnicodeDecodeError:
+            continue
+    return payloads
 
 
 def test_that_plugin_manifest_points_to_discoverable_skills() -> None:
@@ -41,9 +59,7 @@ def test_that_skill_frontmatter_declares_name_and_trigger_description() -> None:
 
 
 def test_that_skill_preserves_the_full_generic_staff_execution_contract() -> None:
-    skill = (ROOT / "skills" / "codex-team" / "SKILL.md").read_text(
-        encoding="utf-8"
-    )
+    skill = (ROOT / "skills" / "codex-team" / "SKILL.md").read_text(encoding="utf-8")
 
     for mapping in (
         "role-P -> `.codex/agents/product_manager.toml` -> `name=product_manager`",
@@ -114,12 +130,8 @@ def test_that_launcher_wheel_contains_one_non_recursive_core_wheel() -> None:
     with zipfile.ZipFile(launcher) as archive:
         nested_wheels = [name for name in archive.namelist() if name.endswith(".whl")]
         assert nested_wheels == [nested_path]
-        skill = archive.read(
-            "agent_task_scheduler/codex_team/assets/codex-team/SKILL.md"
-        ).decode("utf-8")
         nested = archive.read(nested_path)
-    assert "Parlant" not in skill
-    assert "parlant" not in "\n".join(archive.namelist()).lower()
+        outer_payloads = _decodable_text_payloads(archive, excluded_names={nested_path})
     with zipfile.ZipFile(io.BytesIO(nested)) as core:
         assert not any(name.endswith(".whl") for name in core.namelist())
         templates = [
@@ -128,11 +140,16 @@ def test_that_launcher_wheel_contains_one_non_recursive_core_wheel() -> None:
             if "/team-config/.codex/agents/" in name and name.endswith(".toml")
         ]
         assert len(templates) == 6
-        assert not any("parlant" in name.lower() or "issue12" in name.lower() for name in core.namelist())
-        nested_skill = core.read(
-            "agent_task_scheduler/codex_team/assets/codex-team/SKILL.md"
-        ).decode("utf-8")
-    assert "Parlant" not in nested_skill
+        assert (
+            "agent_task_scheduler/codex_team/assets/codex-team/scripts/"
+            "reconcile_handoff.py"
+        ) in core.namelist()
+        core_payloads = _decodable_text_payloads(core)
+    for name, payload in (*outer_payloads, *core_payloads):
+        assert not any(
+            identifier in payload.lower()
+            for identifier in _PROHIBITED_PROJECT_IDENTIFIERS
+        ), name
 
 
 def test_that_readmes_explain_the_skill_and_link_the_task_plan_template() -> None:

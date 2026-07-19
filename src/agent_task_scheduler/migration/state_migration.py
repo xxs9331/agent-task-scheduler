@@ -22,7 +22,7 @@ def migrate_state_document(
     *,
     project_id: str,
 ) -> tuple[dict[str, Any], list[str]]:
-    """Adapt a known Parlant state into the strict canonical v1 shape."""
+    """Adapt a known scheduler legacy v1 state into the canonical v1 shape."""
     if not isinstance(source, dict):
         raise MigrationError("state must be a JSON object")
     source_version = source.get("schema_version")
@@ -76,7 +76,7 @@ def migrate_file(
         "source_schema_version": source.get("schema_version"),
         "target_schema_version": SUPPORTED_SCHEMA_VERSION,
         "changes": changes,
-        "source_format": "parlant_legacy",
+        "source_format": "scheduler_legacy_v1",
         "mapped_field_counts": {
             "tasks": len(migrated["tasks"]),
             "task_fields": sum(len(task) for task in migrated["tasks"].values()),

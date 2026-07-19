@@ -110,6 +110,7 @@ def test_that_migration_receipt_reports_mapping_counts_and_defaults(
 
     receipt = migrate_file(state_path, project_id="demo", dry_run=True)
 
+    assert receipt["source_format"] == "scheduler_legacy_v1"
     assert receipt["mapped_field_counts"]["tasks"] == 1
     assert receipt["defaults_applied"] == ["publish_history"]
     assert receipt["warnings"] == []
