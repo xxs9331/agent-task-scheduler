@@ -193,9 +193,10 @@ def test_that_reinstalling_a_changed_same_version_wheel_replaces_the_managed_pac
 
     assert second.returncode == 0, second.stderr
     assert marker.read_text(encoding="utf-8") == "MARKER = 'replaced'\n"
-    assert json.loads(second.stdout)["wheel_sha256"] != json.loads(first.stdout)[
-        "wheel_sha256"
-    ]
+    assert (
+        json.loads(second.stdout)["wheel_sha256"]
+        != json.loads(first.stdout)["wheel_sha256"]
+    )
 
 
 def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis() -> (
@@ -209,7 +210,7 @@ def test_that_user_facing_bootstrap_docs_require_installer_and_shadow_diagnosis(
         content = path.read_text(encoding="utf-8")
         assert "install_codex_team.py" in content
         assert "type -a codex-team" in content
-        assert "0.3.8" in content
+        assert "0.3.9" in content
 
 
 def test_that_doctor_and_start_do_not_treat_static_features_as_native_attestation() -> (

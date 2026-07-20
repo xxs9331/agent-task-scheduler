@@ -15,7 +15,7 @@ directory. Do not ask the user to locate a plugin cache or clone this repository
 python scripts/install_codex_team.py
 ```
 
-The installer uses the bundled 0.3.9 wheel, creates a private user environment, and
+The installer uses the bundled 0.3.8 wheel, creates a private user environment, and
 places `codex-team` in the standard user bin directory. It emits one JSON receipt
 and never edits shell profiles or PATH. If the receipt says the bin is not on
 PATH, show its one-time path hint, then use `codex-team init`, `codex-team doctor`,
@@ -63,12 +63,8 @@ R advice or gate-failure evidence, the smallest recorded writable scope, and
 Team startup must select the configured native custom-agent name explicitly and use
 `fork_turns=none`. Prompt text or a role TOML read by a generic worker is not
 runtime identity attestation. Identity attestation is assembled by the parent, not self-reported by the child. The parent-visible native spawn receipt supplies
-the agent/thread id. The parent-visible spawn invocation supplies the explicitly requested
-custom-agent name used to construct `requested_custom_agent_name`, plus
-`fork_context=false`; the selected TOML supplies the worker id,
-fixed model, and reasoning effort. Do not require the receipt to echo the selector or
-fork settings. `task_id` is scheduler correlation supplied by the parent, not a native
-spawn-receipt field. The parent verifies this
+the `requested_custom_agent_name` field and agent/thread id; the selected TOML supplies the
+worker id, fixed model, and reasoning effort. `task_id` is scheduler correlation supplied by the parent, not a native spawn-receipt field. The parent verifies this
 evidence against the TOML contract and sends the attestation into the same child
 thread. A child cannot independently read its parent-visible spawn receipt, so missing child self-report is not a failure. Missing or conflicting parent evidence
 fails closed; a generic worker that merely reads a TOML must not claim the mapped

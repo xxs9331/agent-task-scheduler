@@ -29,7 +29,7 @@ _CANONICAL_AGENT_FILES = frozenset(
         "window_d.toml",
     }
 )
-_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.8-py3-none-any.whl"
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.3.9-py3-none-any.whl"
 _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     {
         "agent_task_scheduler-0.3.1-py3-none-any.whl",
@@ -39,10 +39,11 @@ _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
         "agent_task_scheduler-0.3.5-py3-none-any.whl",
         "agent_task_scheduler-0.3.6-py3-none-any.whl",
         "agent_task_scheduler-0.3.7-py3-none-any.whl",
+        "agent_task_scheduler-0.3.8-py3-none-any.whl",
     }
 )
 _SUPPORTED_SKILL_WHEELS = {
-    _BUNDLED_WHEEL_NAME: "0.3.8",
+    _BUNDLED_WHEEL_NAME: "0.3.9",
     **{wheel: wheel.split("-")[1] for wheel in _SUPPORTED_LEGACY_WHEEL_NAMES},
 }
 _REQUIRED_SKILL_FILES = (
@@ -57,17 +58,23 @@ _LEGACY_SKILL_NAMES = (
 )
 _NATIVE_ATTESTATION_NOTE = (
     "Static multi_agent feature status is not native custom-agent attestation. "
-    "Parent-side runtime evidence must include the requested agent type, spawn "
-    "agent/thread id, effective model, and reasoning effort; missing parent evidence "
+    "Parent-side runtime evidence combines the spawn invocation, which proves the "
+    "requested agent type and fork_context=false, with the spawn receipt, which only "
+    "needs to supply the agent/thread id, and the selected TOML contract, which "
+    "supplies the fixed model and reasoning effort. Do not require the receipt to "
+    "echo the selector or fork settings; missing or conflicting parent evidence "
     "fails closed. Child self-report of parent-only fields is not required."
 )
 _PARENT_ATTESTATION_PROTOCOL = (
     "Native-spawn requested agent_type=product_manager with fork_context=false. "
-    "The parent must capture the spawn receipt and verify its spawn agent_id, then "
-    "verify the project TOML contract says worker_id=product_manager, model "
-    "gpt-5.6-sol, and reasoning_effort=high. If the requested selector, spawn "
-    "agent_id, fixed model/effort contract, or fork_context=false evidence is "
-    "missing, close the child and fail closed. After verification, construct the "
+    "The parent-visible spawn invocation proves the requested selector and "
+    "fork_context=false. The spawn receipt only needs to supply the agent_id; "
+    "Do not require the receipt to echo the selector or fork settings. The parent "
+    "must capture the receipt and verify its spawn agent_id, then verify the project "
+    "TOML contract says worker_id=product_manager, model gpt-5.6-sol, and "
+    "reasoning_effort=high. If the requested selector, spawn agent_id, fixed "
+    "model/effort contract, or fork_context=false evidence is missing or conflicting, "
+    "close the child and fail closed. After verification, construct the "
     "attestation in the parent and use send_input to inject it into the same "
     "product_manager thread. Do not ask the child to manufacture or self-report "
     "parent-only receipt fields. A child cannot see its agent_id by itself; that "
@@ -258,7 +265,7 @@ def _init(root: Path) -> dict[str, object]:
     for legacy_backup in legacy_backups:
         if legacy_backup.exists():
             shutil.rmtree(legacy_backup)
-    upgraded_to = "0.3.8" if skill_existed and replaced_skill else None
+    upgraded_to = "0.3.9" if skill_existed and replaced_skill else None
     return {
         "ok": True,
         "operation": "init",
@@ -386,8 +393,12 @@ def _canonical_team_templates() -> tuple[Path, ...]:
     source = _team_config_source()
     templates = tuple(sorted(source.glob("*.toml")))
     names = {template.name for template in templates}
-    if names != _CANONICAL_AGENT_FILES or any(not template.is_file() for template in templates):
-        raise RuntimeError("packaged canonical role template set is incomplete or invalid")
+    if names != _CANONICAL_AGENT_FILES or any(
+        not template.is_file() for template in templates
+    ):
+        raise RuntimeError(
+            "packaged canonical role template set is incomplete or invalid"
+        )
     return templates
 
 
@@ -417,7 +428,7 @@ def _skill_status(skill_root: Path) -> tuple[str, str | None]:
             )
         except (OSError, json.JSONDecodeError):
             return "invalid", wheel_name
-        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.8":
+        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.3.9":
             return "invalid", wheel_name
         source = _skill_source().resolve()
         if skill_root.resolve() != source and not _same_skill_tree(skill_root, source):

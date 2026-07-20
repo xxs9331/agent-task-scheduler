@@ -89,6 +89,23 @@ def test_that_fresh_root_requires_parent_side_native_attestation_before_pm_hando
     assert "close the child and fail closed" in prompt
 
 
+def test_that_fresh_root_assigns_each_attestation_field_to_its_actual_parent_source(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    project = tmp_path / "attestation evidence sources"
+    _install_fake_codex(tmp_path, monkeypatch)
+    assert main(["init", str(project)]) == 0
+    capsys.readouterr()
+
+    assert main(["start", str(project)]) == 0
+
+    prompt = json.loads((tmp_path / "codex-arguments.json").read_text())[-1]
+    assert "spawn invocation proves the requested selector" in prompt
+    assert "fork_context=false" in prompt
+    assert "spawn receipt only needs to supply the agent_id" in prompt
+    assert "Do not require the receipt to echo the selector or fork settings" in prompt
+
+
 def test_that_a_bare_project_path_starts_the_resolved_project(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
@@ -204,9 +221,9 @@ def test_that_init_installs_the_canonical_full_role_contracts_and_reconciler(
     )
     installed = project / ".codex" / "agents"
     for template in canonical.glob("*.toml"):
-        assert (installed / template.name).read_text(encoding="utf-8") == template.read_text(
+        assert (installed / template.name).read_text(
             encoding="utf-8"
-        )
+        ) == template.read_text(encoding="utf-8")
 
     manager = (installed / "product_manager.toml").read_text(encoding="utf-8")
     researcher = (installed / "researcher.toml").read_text(encoding="utf-8")
@@ -215,27 +232,32 @@ def test_that_init_installs_the_canonical_full_role_contracts_and_reconciler(
     assert "original_task_id" in manager
     assert "Read-only by default" in researcher
     assert "Do not implement, edit code/data" in researcher
-    assert "Continue unfinished work in the same scope under the same task id" in executor
+    assert (
+        "Continue unfinished work in the same scope under the same task id" in executor
+    )
     assert "Never publish, create, assign, route, resume, retry" in executor
 
     skill = project / ".agents" / "skills" / "codex-team"
     assert (skill / "scripts" / "reconcile_handoff.py").is_file()
     skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
-    assert "Direct boss prompts authorize bounded execution but are not scheduler tasks" in skill_text
+    assert (
+        "Direct boss prompts authorize bounded execution but are not scheduler tasks"
+        in skill_text
+    )
     assert "reconcile_handoff.py" in skill_text
 
 
-def test_that_init_transactionally_upgrades_a_stock_037_skill_to_038(
+def test_that_init_transactionally_upgrades_a_stock_038_skill_to_039(
     tmp_path: Path, capsys
 ) -> None:
-    project = tmp_path / "0.3.7 project"
-    skill = _initialize_with_legacy_skill(project, capsys, "0.3.7")
+    project = tmp_path / "0.3.8 project"
+    skill = _initialize_with_legacy_skill(project, capsys, "0.3.8")
 
     assert main(["init", str(project)]) == 0
 
     receipt = json.loads(capsys.readouterr().out)
-    assert receipt["upgraded_from"] == "0.3.7"
-    assert receipt["upgraded_to"] == "0.3.8"
+    assert receipt["upgraded_from"] == "0.3.8"
+    assert receipt["upgraded_to"] == "0.3.9"
     assert not (skill.parent / "codex-team.backup").exists()
     assert main(["doctor", str(project)]) == 0
 
@@ -467,7 +489,8 @@ def test_that_init_replaces_an_existing_skill_with_an_unreadable_old_wheel(
 
 
 @pytest.mark.parametrize(
-    "legacy_version", ["0.3.1", "0.3.2", "0.3.3", "0.3.4", "0.3.5", "0.3.6", "0.3.7"]
+    "legacy_version",
+    ["0.3.1", "0.3.2", "0.3.3", "0.3.4", "0.3.5", "0.3.6", "0.3.7", "0.3.8"],
 )
 def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     tmp_path: Path, capsys, legacy_version: str
@@ -477,7 +500,7 @@ def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     assert main(["init", str(project)]) == 0
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == legacy_version
-    assert receipt["upgraded_to"] == "0.3.8"
+    assert receipt["upgraded_to"] == "0.3.9"
     assert main(["doctor", str(project)]) == 0
     assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
     assert not (project / ".agents" / "skills" / "codex-team.backup").exists()
@@ -504,7 +527,7 @@ def test_that_init_replaces_a_modified_managed_legacy_skill(
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     (skill / "SKILL.md").write_text("modified", encoding="utf-8")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.8"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.9"
     assert (skill / "SKILL.md").read_text(encoding="utf-8") != "modified"
 
 
@@ -519,7 +542,8 @@ def test_that_init_replaces_a_managed_legacy_skill_with_an_extra_file(
 
 
 @pytest.mark.parametrize(
-    "legacy_version", ["0.3.1", "0.3.2", "0.3.3", "0.3.4", "0.3.5"]
+    "legacy_version",
+    ["0.3.1", "0.3.2", "0.3.3", "0.3.4", "0.3.5", "0.3.6", "0.3.7", "0.3.8"],
 )
 def test_that_init_replaces_a_same_version_wheel_outside_official_variants(
     tmp_path: Path, capsys, legacy_version: str
@@ -560,7 +584,7 @@ def test_that_init_ignores_transient_pycache_when_migrating_stock_legacy(
     cache.mkdir()
     (cache / "install.cpython-312.pyc").write_bytes(b"transient")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.8"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.9"
 
 
 def test_that_init_rolls_back_a_partial_skill_copy_failure(
@@ -727,7 +751,7 @@ def test_that_doctor_fails_closed_for_an_unknown_future_skill_wheel(
     project = tmp_path / "unknown project"
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     wheel = next((skill / "assets").glob("*.whl"))
-    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.8-py3-none-any.whl")
+    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.9-py3-none-any.whl")
 
     assert main(["doctor", str(project)]) == 2
 
@@ -747,7 +771,7 @@ def test_that_doctor_rejects_a_renamed_wheel_with_mismatched_metadata(
         / "skills"
         / "codex-team"
         / "assets"
-        / "agent_task_scheduler-0.3.8-py3-none-any.whl",
+        / "agent_task_scheduler-0.3.9-py3-none-any.whl",
         wheel,
     )
 

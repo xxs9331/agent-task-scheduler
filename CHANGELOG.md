@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 0.3.9
+
+- Clarified native PM attestation evidence ownership: the parent-visible spawn
+  invocation proves the requested selector and `fork_context=false`, the spawn
+  receipt supplies `agent_id`, and the selected TOML supplies the fixed role,
+  model, and reasoning contract. Receipts are no longer incorrectly expected to
+  echo invocation arguments.
+
 ### 0.3.8
 
 - Force-reinstall the exact bundled wheel in the private managed user environment,
