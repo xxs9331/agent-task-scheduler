@@ -47,14 +47,20 @@ The root native-spawns the product manager at depth 1. The product manager owns
 authorized publication and coordinates A/B/C/D/R at depth 2; depth-2 staff do not
 spawn another level. A/B/C/D execute only bounded authorized work and cannot
 publish. R is read-only for research and gate review and cannot implement or
-publish. The product manager does not claim ordinary executor work and does not claim ordinary tasks.
+publish. The product manager does not claim ordinary tasks or ordinary executor
+work, but may directly claim bounded PM-owned debugging work as described below.
 
 Direct boss prompts authorize bounded execution but are not scheduler tasks.
 Executors A/B/C/D retain their worker id, task boundary, writable scope, and
 acceptance criteria for same-task continuation; they do not publish, route, or
 manage work for another role. R is read-only by default and must not implement,
 edit code/data, run generation or business evaluations, or self-approve PM
-fallback work. PM fallback is exceptional: it requires explicit boss approval,
+debug or fallback work. PM debug is a first-class PM responsibility when the
+problem requires PM-owned plan, cross-domain, publication, authority, or runtime
+context. A bounded `pm_debug` task authorizes P to reproduce the problem, inspect
+the relevant system, modify code within scope, run verification, and complete the
+repair; it does not require prior A/B/C/D failure, model escalation, R advice, or
+case-by-case boss approval. PM fallback remains exceptional: it requires explicit boss approval,
 R advice or gate-failure evidence, the smallest recorded writable scope, and
 `fallback_authorization` containing `original_task_id`, `blocking_evidence`,
 `model_escalation_attempted`, `user_authorization`, `r_evidence`,
@@ -96,7 +102,24 @@ Role-R must not implement or publish tasks. The claimed worker prompt must grant
 no implementation or publication authority; gate lifecycle follows the task.
 
 Role-P normally publishes authorized task definitions and does not claim ordinary
-tasks. Exceptional implementation fallback uses `role-p` only when
+tasks. Bounded PM-owned debugging uses the persistent worker `product_manager`
+only when `metadata.team_mode.kind=pm_debug`, `required_worker=product_manager`,
+and the task records bounded `writable_files` plus a self-contained
+`worker_prompt` with the problem, constraints, verification, acceptance, and
+block conditions. The PM may diagnose, modify code, run the authorized tests, and
+complete the repair. Claim it with:
+
+`<project-local-scheduler> --project-root <project-root> claim --task <task_id> --worker product_manager`
+
+The `staff-sync` profile for `product_manager` may therefore set
+`can_execute_tasks=true`, but must restrict execution to the `pm_debug` kind and
+the required task agent type. Do not label ordinary planned implementation,
+capacity overflow, or a same-domain executor continuation as `pm_debug` merely to
+bypass routing. PM debug does not waive explicit approval for external writes,
+destructive actions, expensive evaluations, or another configured safety gate,
+and P cannot self-approve an independent R gate.
+
+Exceptional implementation fallback uses `role-p` only when
 `metadata.team_mode.kind=pm_fallback` and complete `fallback_authorization`
 metadata are present. Claim it only with:
 

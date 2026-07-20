@@ -185,6 +185,39 @@ def test_that_claim_rechecks_required_worker_agent_type_kind_and_fallback_metada
     assert accepted["ok"] is True
 
 
+def test_that_product_manager_can_claim_bounded_pm_debug_work() -> None:
+    state = _state_with_ready_task()
+    task = state["tasks"]["task-a"]
+    task.update(
+        {
+            "required_worker": "product_manager",
+            "metadata": {"team_mode": {"kind": "pm_debug"}},
+            "writable_files": ["src/service.py", "tests/test_service.py"],
+            "worker_prompt": {
+                "problem": "Reproduce and repair the cross-module runtime failure.",
+                "writable_scope": ["src/service.py", "tests/test_service.py"],
+                "verification": ["pytest tests/test_service.py"],
+            },
+        }
+    )
+    state["staff_model"] = {
+        "staff": {
+            "product_manager": _worker_profile(allowed_task_kinds=["pm_debug"]),
+            "window-a": _worker_profile(),
+        }
+    }
+    service = LifecycleService(now=_fixed_now)
+
+    wrong_worker = service.claim(state, task_id="task-a", worker_id="window-a")
+    accepted = service.claim(
+        state, task_id="task-a", worker_id="product_manager"
+    )
+
+    assert wrong_worker["reason"] == "required_worker_mismatch"
+    assert accepted["ok"] is True
+    assert state["tasks"]["task-a"]["owner"] == "product_manager"
+
+
 def test_that_claim_rejects_overlapping_writable_paths_even_across_domains() -> None:
     state = _state_with_ready_task()
     state["tasks"]["task-a"]["worker_prompt"] = {

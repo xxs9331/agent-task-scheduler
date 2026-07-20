@@ -5,8 +5,8 @@
   "integrity": "sha256-manifest",
   "files": {
     "README.md": "d616cc2411e3a7d3884065fb95dfc182f2ea2966cd6ec38f1921db05442f0978",
-    "SKILL.md": "c94f803eabc2d5f5c5f1284552b024520986393bdc7cb88b6da9e3853b4b5cfe",
-    "assets/任务计划书模板.md": "5e719e04853f751434daef3dfa85f7c53fe50fc827842470660ba28530852f2c",
+    "SKILL.md": "8665491a9b3ce440b285adebdf160c935d797441b7cec76817cc7a5fcc02c7c5",
+    "assets/任务计划书模板.md": "2765f06faa68aba6a51b32217579e21d80d8a294cda068052f76230735ed6a1c",
     "references/bootstrap.md": "859e5da4c5c77d578bf4016db27edb5d13937ca9049fafcd7f718cbf325ff004",
     "references/contract.md": "24e74c9588e1aa18e09edc4201d6c3ce9f4fe91a644537795794ac7acf6133bf",
     "references/errors.md": "f850a0d08bb424aed661bb8afd2f5ea667cbad6b2c586056fa3446c1a49f0aee",

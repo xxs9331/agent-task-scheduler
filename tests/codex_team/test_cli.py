@@ -228,6 +228,9 @@ def test_that_init_installs_the_canonical_full_role_contracts_and_reconciler(
     manager = (installed / "product_manager.toml").read_text(encoding="utf-8")
     researcher = (installed / "researcher.toml").read_text(encoding="utf-8")
     executor = (installed / "window_a.toml").read_text(encoding="utf-8")
+    assert "metadata.team_mode.kind=pm_debug" in manager
+    assert "worker id `product_manager`" in manager
+    assert "modify code and complete the repair" in manager
     assert "fallback_authorization" in manager
     assert "original_task_id" in manager
     assert "Read-only by default" in researcher

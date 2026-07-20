@@ -4,6 +4,9 @@
 
 ### 0.3.9
 
+- Added first-class `pm_debug` work for the persistent product manager, allowing
+  bounded diagnosis, code changes, verification, and completed repairs without
+  the exhaustion prerequisites of exceptional `pm_fallback` takeover work.
 - Clarified native PM attestation evidence ownership: the parent-visible spawn
   invocation proves the requested selector and `fork_context=false`, the spawn
   receipt supplies `agent_id`, and the selected TOML supplies the fixed role,

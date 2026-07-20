@@ -58,6 +58,11 @@ receipt 中分开报告 `created`、`updated` 和 Skill 版本迁移。`doctor` 
 `window_a/window_b/window_c/window_d/researcher`，其 scheduler worker id 为小写
 `role-a...role-r`。
 
+P 默认仍是计划、发布和救火协调者，但可用持久 worker `product_manager` 直接领取
+`metadata.team_mode.kind=pm_debug` 且 `required_worker=product_manager` 的边界明确 Debug
+任务，亲自复现问题、修改代码、验证并完成修复。它不要求先耗尽 A/B/C/D；接管普通
+执行任务则继续使用严格授权的 `pm_fallback`，不能借 Debug 分类绕过正常路由。
+
 ## Skill 是什么
 
 Codex Team Skill 是 Codex 使用团队和调度器时的可复用操作手册。它不保存任务数据，

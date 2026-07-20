@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import io
 import zipfile
+from hashlib import sha256
 from pathlib import Path
 
 
@@ -79,6 +80,8 @@ def test_that_skill_preserves_the_full_generic_staff_execution_contract() -> Non
         "role-R may claim only read-only research, review, or gate tasks",
         "Role-R must not implement or publish tasks",
         "does not claim ordinary tasks",
+        "metadata.team_mode.kind=pm_debug",
+        "claim --task <task_id> --worker product_manager",
         "metadata.team_mode.kind=pm_fallback",
         "claim --task <task_id> --worker role-p",
         "If the same task's native child is still open, continue it with `send_input`",
@@ -120,6 +123,15 @@ def test_that_skill_bundles_the_relative_user_command_installer() -> None:
     assert (skill / "assets" / "agent_task_scheduler-0.3.9-py3-none-any.whl").is_file()
 
 
+def test_that_managed_skill_manifest_matches_current_files() -> None:
+    skill = ROOT / "skills" / "codex-team"
+    marker = json.loads((skill / "assets" / "managed-skill.json").read_text())
+
+    assert marker["integrity"] == "sha256-manifest"
+    for relative, expected in marker["files"].items():
+        assert sha256((skill / relative).read_bytes()).hexdigest() == expected
+
+
 def test_that_launcher_wheel_contains_one_non_recursive_core_wheel() -> None:
     launcher = (
         ROOT
@@ -150,6 +162,15 @@ def test_that_launcher_wheel_contains_one_non_recursive_core_wheel() -> None:
             "reconcile_handoff.py"
         ) in core.namelist()
         core_payloads = _decodable_text_payloads(core)
+    for payloads in (outer_payloads, core_payloads):
+        assert any(
+            "metadata.team_mode.kind=pm_debug" in payload
+            for _name, payload in payloads
+        )
+        assert any(
+            "modify code and complete the repair" in payload
+            for _name, payload in payloads
+        )
     for name, payload in (*outer_payloads, *core_payloads):
         assert not any(
             identifier in payload.lower()
