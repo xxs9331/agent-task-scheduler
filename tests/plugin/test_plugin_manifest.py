@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import io
+import re
 import zipfile
 from hashlib import sha256
 from pathlib import Path
@@ -145,6 +146,9 @@ def test_that_managed_skill_manifest_matches_current_files() -> None:
 
 
 def test_that_launcher_wheel_contains_one_non_recursive_core_wheel() -> None:
+    current_version = json.loads(
+        (ROOT / ".codex-plugin" / "plugin.json").read_text()
+    )["version"]
     launcher = (
         ROOT
         / "skills"
@@ -183,6 +187,12 @@ def test_that_launcher_wheel_contains_one_non_recursive_core_wheel() -> None:
             "modify code and complete the repair" in payload
             for _name, payload in payloads
         )
+        bundled_versions = {
+            match.group(1)
+            for _name, payload in payloads
+            for match in re.finditer(r"bundled (\d+\.\d+\.\d+) wheel", payload)
+        }
+        assert bundled_versions == {current_version}
     for name, payload in (*outer_payloads, *core_payloads):
         assert not any(
             identifier in payload.lower()

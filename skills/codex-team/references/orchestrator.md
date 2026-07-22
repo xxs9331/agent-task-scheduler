@@ -22,7 +22,7 @@ directory:
 python scripts/install_codex_team.py
 ```
 
-The installer uses the bundled 0.4.0 wheel, creates a private user environment,
+The installer uses the bundled 0.4.1 wheel, creates a private user environment,
 and places `codex-team` in the standard user bin directory. It emits one JSON
 receipt and never edits shell profiles or PATH. If the receipt says the bin is
 not on PATH, show its one-time path hint, then use `codex-team init`,
