@@ -356,6 +356,51 @@ def test_that_describe_returns_selected_task_fields_and_retry_records_handoff() 
     assert "owner" not in task
 
 
+def test_that_repeated_structured_failure_candidate_requires_two_distinct_attempts() -> None:
+    state = _state_with_ready_task()
+    service = LifecycleService(now=_fixed_now)
+    first = service.claim(state, task_id="task-a", worker_id="window-a")
+    service.retry(state, task_id="task-a", worker_id="window-a", lease_id=first["lease_id"], reason="failed", last_attempt_summary="one", next_attempt_instruction="retry", failure_class="test", failure_fingerprint="digest-1")
+    assert service.status(state)["escalation_candidates"] == []
+    second = service.continue_task(state, task_id="task-a", worker_id="window-a")
+    service.fail(state, task_id="task-a", worker_id="window-a", lease_id=second["lease_id"], reason="failed", failure_class="test", failure_fingerprint="digest-1")
+    candidate = service.status(state)["escalation_candidates"][0]
+    assert candidate["trigger"] == "repeated_failure"
+    assert candidate["evidence"]["attempts"] == [1, 2]
+    assert candidate["actionable"] is False
+
+
+def test_that_different_failure_fingerprints_do_not_trigger_and_no_worker_is_not_busy() -> None:
+    state = _state_with_ready_task()
+    service = LifecycleService(now=_fixed_now)
+    first = service.claim(state, task_id="task-a", worker_id="window-a")
+    service.retry(state, task_id="task-a", worker_id="window-a", lease_id=first["lease_id"], reason="failed", last_attempt_summary="one", next_attempt_instruction="retry", failure_class="test", failure_fingerprint="one")
+    second = service.continue_task(state, task_id="task-a", worker_id="window-a")
+    service.fail(state, task_id="task-a", worker_id="window-a", lease_id=second["lease_id"], reason="failed", failure_class="test", failure_fingerprint="two")
+    assert service.status(state)["escalation_candidates"] == []
+    state = _state_with_ready_task()
+    state["staff_model"] = {"staff": {"window-a": _worker_profile(can_execute_tasks=False)}}
+    assert service.status(state)["escalation_candidates"][0]["trigger"] == "no_eligible_worker"
+    state["tasks"]["task-a"]["depends_on"] = ["missing"]
+    assert service.status(state)["escalation_candidates"] == []
+
+
+def test_that_temporarily_busy_eligible_worker_is_not_an_authority_gap() -> None:
+    state = _state_with_ready_task()
+    state["tasks"]["active"] = {
+        **state["tasks"]["task-a"],
+        "task_id": "active",
+        "status": "running",
+        "owner": "window-a",
+        "conflict_domain": "other",
+        "lease_id": "active-lease",
+        "lease_expires_at": "2026-07-13T03:30:00+00:00",
+    }
+    service = LifecycleService(now=_fixed_now)
+
+    assert service.status(state)["escalation_candidates"] == []
+
+
 def test_that_resume_and_continue_restore_terminal_task_with_new_lease() -> None:
     state = _state_with_ready_task()
     task = state["tasks"]["task-a"]

@@ -76,6 +76,10 @@ class SchedulerCore:
         reason: str,
         last_attempt_summary: str,
         next_attempt_instruction: str,
+        failure_class: str | None = None,
+        failure_fingerprint: str | None = None,
+        verification_evidence: object | None = None,
+        model_escalation_attempted: bool | None = None,
     ) -> Receipt:
         return self._lifecycle.retry(
             state,
@@ -85,6 +89,9 @@ class SchedulerCore:
             reason=reason,
             last_attempt_summary=last_attempt_summary,
             next_attempt_instruction=next_attempt_instruction,
+            failure_class=failure_class, failure_fingerprint=failure_fingerprint,
+            verification_evidence=verification_evidence,
+            model_escalation_attempted=model_escalation_attempted,
         )
 
     def resume(
@@ -126,6 +133,10 @@ class SchedulerCore:
         worker_id: str,
         lease_id: str,
         reason: str,
+        failure_class: str | None = None,
+        failure_fingerprint: str | None = None,
+        verification_evidence: object | None = None,
+        model_escalation_attempted: bool | None = None,
     ) -> Receipt:
         return self._lifecycle.block(
             state,
@@ -133,6 +144,9 @@ class SchedulerCore:
             worker_id=worker_id,
             lease_id=lease_id,
             reason=reason,
+            failure_class=failure_class, failure_fingerprint=failure_fingerprint,
+            verification_evidence=verification_evidence,
+            model_escalation_attempted=model_escalation_attempted,
         )
 
     def fail(
@@ -143,6 +157,10 @@ class SchedulerCore:
         worker_id: str,
         lease_id: str,
         reason: str,
+        failure_class: str | None = None,
+        failure_fingerprint: str | None = None,
+        verification_evidence: object | None = None,
+        model_escalation_attempted: bool | None = None,
     ) -> Receipt:
         return self._lifecycle.fail(
             state,
@@ -150,6 +168,9 @@ class SchedulerCore:
             worker_id=worker_id,
             lease_id=lease_id,
             reason=reason,
+            failure_class=failure_class, failure_fingerprint=failure_fingerprint,
+            verification_evidence=verification_evidence,
+            model_escalation_attempted=model_escalation_attempted,
         )
 
     def release_expired(self, state: MutableMapping[str, object]) -> Receipt:

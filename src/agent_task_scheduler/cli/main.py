@@ -104,6 +104,11 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--lease-id", required=True)
         if name in {"block", "fail", "retry", "resume"}:
             command.add_argument("--reason", required=True)
+        if name in {"block", "fail", "retry"}:
+            command.add_argument("--failure-class")
+            command.add_argument("--failure-fingerprint")
+            command.add_argument("--verification-evidence-json")
+            command.add_argument("--model-escalation-attempted", action="store_true", default=None)
         if name in {"retry", "resume"}:
             command.add_argument("--last-attempt-summary", required=True)
             command.add_argument("--next-attempt-instruction", required=True)
@@ -340,6 +345,11 @@ def _lifecycle(args: argparse.Namespace, context: ProjectContext) -> dict[str, o
         if command in {"retry", "resume"}:
             kwargs["last_attempt_summary"] = args.last_attempt_summary
             kwargs["next_attempt_instruction"] = args.next_attempt_instruction
+        if command in {"block", "fail", "retry"}:
+            kwargs["failure_class"] = args.failure_class
+            kwargs["failure_fingerprint"] = args.failure_fingerprint
+            kwargs["verification_evidence"] = json.loads(args.verification_evidence_json) if args.verification_evidence_json else None
+            kwargs["model_escalation_attempted"] = args.model_escalation_attempted
         if command == "complete":
             kwargs["summary"] = args.summary
         receipt = method(state, **kwargs)

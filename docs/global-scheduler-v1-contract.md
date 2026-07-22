@@ -66,3 +66,11 @@ receipts use `operation: "migrate"`, an empty `changed_task_ids`, and a
 `publish_history` is the authoritative publish fact, not a full lifecycle audit log. Entries have unique `event_id`, `event_type`, `occurred_at`, `project_id`, `task_id`, and a change summary. History is retained until explicit export/archival. Optional JSONL observation logging is non-authoritative. If state commit succeeds but JSONL append fails, the command still returns `ok: true` with `warnings: [{"code":"OBSERVATION_LOG_WARNING","message":"state committed; observation log append failed","rebuild_from":"publish_history"}]`; it must not return a false failure or roll back state.
 
 `migrate --check`/`--dry-run` never changes bytes. A real migration locks first, validates the complete target state, and atomically replaces the file. Failure leaves original bytes unchanged and reports source version, target version, and summary.
+# Escalation candidates
+
+`status` includes read-only `escalation_candidates`. A repeated-failure candidate
+requires the same explicitly supplied non-empty fingerprint on two distinct
+attempts; a no-eligible-worker candidate requires no executable roster member
+for the task. Candidates never claim, publish, relabel, or mutate a task.
+They are advisory evidence for PM reconciliation and remain non-actionable until
+the existing PM debug or complete PM fallback authorization contract is met.

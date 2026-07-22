@@ -14,8 +14,9 @@ Identity and profile:
   launched CLI window and may intentionally have different settings.
 
 Startup:
-- Read CLAUDE.md, AGENTS.md, this file, and the unified codex-team Skill.
+- Read CLAUDE.md, AGENTS.md, this file, and the concise unified codex-team Skill. Do not load the PM-only orchestrator reference for routine review.
 - For scheduler work, claim and operate only as role-r through the project-local CLI. The task prompt and assigned gate criteria are authoritative.
+- This thread may receive successive task ids only within the same parent-attested batch, worker id, and review workstream. Claim and describe every new task separately; prior review context is evidence, not authorization, and never expands the assigned gate.
 
 Responsibilities:
 - R may claim only read-only research, review, or gate tasks as `role-r`; reject any worker_prompt that grants implementation or publication authority.

@@ -56,6 +56,8 @@ def test_that_fresh_root_prompt_forbids_recursive_launcher_commands(
     assert "fork_turns=none" in prompt
     assert ".codex/TEAM_MODE_V2_PM_HANDOFF.md" in prompt
     assert "unified codex-team Skill" in prompt
+    assert "references/orchestrator.md" in prompt
+    assert "Create a new agent each time" not in prompt
     assert "global-scheduler Skill" not in prompt
 
 
@@ -233,21 +235,31 @@ def test_that_init_installs_the_canonical_full_role_contracts_and_reconciler(
     assert "modify code and complete the repair" in manager
     assert "fallback_authorization" in manager
     assert "original_task_id" in manager
+    assert "(batch_id, worker_id, workstream) -> live agent_id" in manager
+    assert "do not pre-spawn the roster" in manager
+    assert "even when `task_id` changes" in manager
     assert "Read-only by default" in researcher
     assert "Do not implement, edit code/data" in researcher
+    assert "Claim and describe every new task separately" in researcher
     assert (
         "Continue unfinished work in the same scope under the same task id" in executor
     )
+    assert "same parent-attested batch, worker id, and workstream" in executor
+    assert "Claim and describe every new task separately" in executor
     assert "Never publish, create, assign, route, resume, retry" in executor
 
     skill = project / ".agents" / "skills" / "codex-team"
     assert (skill / "scripts" / "reconcile_handoff.py").is_file()
     skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
-    assert (
-        "Direct boss prompts authorize bounded execution but are not scheduler tasks"
-        in skill_text
+    orchestrator = (skill / "references" / "orchestrator.md").read_text(
+        encoding="utf-8"
     )
-    assert "reconcile_handoff.py" in skill_text
+    assert "concise execution and safety contract" in skill_text
+    assert "references/orchestrator.md" in skill_text
+    assert "Prior task authorization never carries forward" in skill_text
+    assert "(batch_id, worker_id, workstream) -> live agent_id" in orchestrator
+    assert "do not pre-spawn" in orchestrator
+    assert "reconcile_handoff.py" in orchestrator
 
 
 def test_that_init_transactionally_upgrades_a_stock_038_skill_to_039(
@@ -260,7 +272,7 @@ def test_that_init_transactionally_upgrades_a_stock_038_skill_to_039(
 
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == "0.3.8"
-    assert receipt["upgraded_to"] == "0.3.9"
+    assert receipt["upgraded_to"] == "0.4.0"
     assert not (skill.parent / "codex-team.backup").exists()
     assert main(["doctor", str(project)]) == 0
 
@@ -372,6 +384,9 @@ def test_that_doctor_and_role_start_use_canonical_names_and_native_agent_mapping
     arguments = json.loads((tmp_path / "codex-arguments.json").read_text())
     assert arguments[:2] == ["-C", str(project.resolve())]
     assert "native window_a" in arguments[-1]
+    assert "concise unified codex-team Skill" in arguments[-1]
+    assert "Do not load the PM-only references/orchestrator.md" in arguments[-1]
+    assert "Create a new agent each time" not in arguments[-1]
     assert not any("resume" in argument for argument in arguments)
 
 
@@ -503,7 +518,7 @@ def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     assert main(["init", str(project)]) == 0
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == legacy_version
-    assert receipt["upgraded_to"] == "0.3.9"
+    assert receipt["upgraded_to"] == "0.4.0"
     assert main(["doctor", str(project)]) == 0
     assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
     assert not (project / ".agents" / "skills" / "codex-team.backup").exists()
@@ -530,7 +545,7 @@ def test_that_init_replaces_a_modified_managed_legacy_skill(
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     (skill / "SKILL.md").write_text("modified", encoding="utf-8")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.9"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.4.0"
     assert (skill / "SKILL.md").read_text(encoding="utf-8") != "modified"
 
 
@@ -587,7 +602,7 @@ def test_that_init_ignores_transient_pycache_when_migrating_stock_legacy(
     cache.mkdir()
     (cache / "install.cpython-312.pyc").write_bytes(b"transient")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.3.9"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.4.0"
 
 
 def test_that_init_rolls_back_a_partial_skill_copy_failure(
@@ -754,7 +769,7 @@ def test_that_doctor_fails_closed_for_an_unknown_future_skill_wheel(
     project = tmp_path / "unknown project"
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     wheel = next((skill / "assets").glob("*.whl"))
-    wheel.rename(skill / "assets" / "agent_task_scheduler-0.3.9-py3-none-any.whl")
+    wheel.rename(skill / "assets" / "agent_task_scheduler-0.4.0-py3-none-any.whl")
 
     assert main(["doctor", str(project)]) == 2
 
@@ -774,7 +789,7 @@ def test_that_doctor_rejects_a_renamed_wheel_with_mismatched_metadata(
         / "skills"
         / "codex-team"
         / "assets"
-        / "agent_task_scheduler-0.3.9-py3-none-any.whl",
+        / "agent_task_scheduler-0.4.0-py3-none-any.whl",
         wheel,
     )
 

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### 0.4.0
+
+- Added read-only, fail-closed PM rescue candidates for repeated structured
+  failures and true no-eligible-worker authority gaps.
+- Added batch-workstream affinity for reusing a still-live, parent-attested
+  exact-role child across compatible scheduler task boundaries, without carrying
+  prior task authorization forward.
+- Split the concise staff execution contract from the PM-only orchestration,
+  attestation, publication, debug/fallback, gate, and reconciliation reference.
+- Updated native startup prompts to avoid unconditional fresh staff creation while
+  retaining fresh-root PM startup and `fork_turns=none` for new children.
+
 ### 0.3.9
 
 - Added first-class `pm_debug` work for the persistent product manager, allowing

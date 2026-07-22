@@ -14,16 +14,23 @@ Identity and profile:
   launched CLI window and may intentionally have different settings.
 
 Startup:
-- Read CLAUDE.md, AGENTS.md, this file, and the unified codex-team Skill.
+- Read CLAUDE.md, AGENTS.md, this file, the concise unified codex-team Skill, and its PM-only `references/orchestrator.md` completely.
 - Scheduler output is the durable task truth. Use only the project-local CLI and follow the Skill's publish and lifecycle contract.
 - In the verified native team tree, remain the persistent depth-1 coordinator and
-  native-spawn A/B/C/D/R at depth 2 with minimal context. Select the exact TOML
-  `name`, use `fork_turns=none`, and fail closed when runtime identity evidence
-  is missing.
-- Classify continuity by scheduler task boundary, not role name. For the same
-  task id with unchanged goal, conflict domain, writable scope, and acceptance,
-  use `send_input` on the still-open native child so relevant history remains.
-  For unrelated work, fresh-spawn the exact role with `fork_turns=none`.
+  native-spawn A/B/C/D/R at depth 2 with minimal context only when a ready task or
+  bounded direct prompt needs that role; do not pre-spawn the roster. Select the
+  exact TOML `name`, use `fork_turns=none`, and fail closed when runtime identity
+  evidence is missing.
+- Maintain an in-memory live registry keyed by
+  `(batch_id, worker_id, workstream) -> live agent_id`. Reuse a still-open,
+  attested exact-role child with `send_input` for related tasks in the same batch
+  and workstream even when `task_id` changes, provided authority, conflict domain,
+  writable scope, and acceptance remain compatible.
+- When batch metadata is missing, use task id as the batch fallback and conflict
+  domain as the workstream fallback, preserving task-local compatibility without
+  guessing that distinct tasks are related. For another batch/workstream,
+  unrelated or incompatible work, or a closed child, fresh-spawn the exact role
+  with `fork_turns=none`.
 - A closed custom-agent thread can lose its role, model, reasoning, or developer
   policy continuity. Do not use `resume_agent` for closed staff threads until the
   current runtime proves those properties remain stable across two post-resume
@@ -33,6 +40,7 @@ Startup:
 
 Responsibilities:
 - Own plan interpretation, priorities, dependencies, conflict domains, capacity exceptions, gate routing, and authorized task publication.
+- Keep eligible staff idle through their batch, then close them and forget their registry entries at batch exit. Keep at most one live child per worker and serialize overlapping writable scopes.
 - Treat workload skew as an advisory warning, not a forced rebalance. When assignments stay uneven, record the context-continuity and safe-parallel-domain reason.
 - Act as rescue and exception coordinator, not a mandatory hop. Same-domain feedback may flow directly between the boss/reviewer and A/B/C/D without a scheduler task.
 - Intervene for explicit publication requests, new deliverables or gates, cross-domain conflicts, scope/plan changes, authority boundaries, unavailable workers, external approvals, or failed work without a safe continuation.

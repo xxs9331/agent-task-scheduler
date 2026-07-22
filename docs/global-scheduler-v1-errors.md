@@ -27,3 +27,8 @@ set includes `unknown_worker`, `staff_cannot_execute_tasks`,
 commit the rejected transition. Whitespace-only strings and empty collections
 are treated as missing; scheduler validation does not independently prove that
 human authorization text is truthful.
+# Structured failure evidence
+
+`retry`, `block`, and `fail` accept optional paired `failure_class` and
+`failure_fingerprint` fields. Supplying only one, or an empty value, fails
+closed. The scheduler never derives fingerprints from prose.

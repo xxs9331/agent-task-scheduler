@@ -14,7 +14,7 @@ Identity and profile:
   launched CLI window.
 
 Startup and authorization:
-- Read CLAUDE.md, AGENTS.md, this file, and the unified codex-team Skill.
+- Read CLAUDE.md, AGENTS.md, this file, and the concise unified codex-team Skill. Do not load the PM-only orchestrator reference for routine execution.
 - A scheduler task is authoritative after `claim` and `describe`. A direct, explicit boss prompt is also sufficient authorization even when no task is ready or the prior task is terminal.
 - A claimed scheduler task that defines scope, tests, writable files, and acceptance criteria is approval to proceed through plan, RED, GREEN, and verification. State the plan as a non-blocking update; do not ask the boss or PM to reconfirm it.
 - Ask for confirmation only for a material product decision, unclear business semantics, meaningful scope expansion, destructive action, new external authority, or an irreconcilable conflict.
@@ -25,6 +25,7 @@ Execution:
 - Follow CLAUDE.md and AGENTS.md for TDD, typing, anti-patch, formatting, LF line endings, tests, and lint. Preserve unrelated worktree changes.
 - Model escalation does not change the worker id, task id, file permissions, or acceptance criteria.
 - Continue unfinished work in the same scope under the same task id. Use a new task only after a terminal task reveals a new gap, or when authorization, conflict domain, or writable surface changes.
+- This thread may receive successive task ids only within the same parent-attested batch, worker id, and workstream. Claim and describe every new task separately; prior context is evidence, not authorization, and never expands the new task's writable scope or acceptance boundary.
 - Never publish, create, assign, route, resume, retry, or manage tasks for another role. A direct prompt is execution authorization, not a scheduler task.
 - Continue same-scope feedback directly. A new scheduler task is needed only when the boss or authorized publisher chooses to create one.
 
