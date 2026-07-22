@@ -1,13 +1,13 @@
 {
   "files": {
-    "README.md": "11f7535ac80ccc513cfa4e921afb998eba08f5c6b46fb9e6b62708b79dbe1001",
-    "SKILL.md": "71cc1c35a93d165f0a054904e4ec680982851ba297b757325e4b4c55be9752b5",
+    "README.md": "fa07de2681f3c72a5da5d497c8b33021ce5b3266d170e02ea4db75be6cf9a270",
+    "SKILL.md": "14ce57bd9c07473003d7791f8b75f9e01b6e3649569cc2f5d857d8b32bebcbf5",
     "assets/任务计划书模板.md": "2765f06faa68aba6a51b32217579e21d80d8a294cda068052f76230735ed6a1c",
     "references/bootstrap.md": "914b8a4d3f3f3c6a42fb69e3cff58120e014ce7abe431858f9fc99aad5b23f07",
     "references/contract.md": "24e74c9588e1aa18e09edc4201d6c3ce9f4fe91a644537795794ac7acf6133bf",
     "references/errors.md": "55e1b9c2dd0a4041eb8380b97f82aa6ab39c99120397b031a59bba8c0189d62e",
     "references/migration.md": "83e5faedc409bc95267ae9c2ce8fd918ebc893e357564618826cbc2e2a0a8a4b",
-    "references/orchestrator.md": "5148aaa49eb126f668a791a4c0b1dc05b2ea1ff68033608986c3d36cd9d21a5c",
+    "references/orchestrator.md": "97836f31dac9335f7678ddd75ea5f5d93c553316840e3d3f2b76660313a48d8a",
     "references/platform.md": "264f2a83669310a451d401a4f8eda9f655691433ff9531d53f43846f31820758",
     "scripts/install.py": "4f8473e08553bf8a53d947c31c7e6f6cfffe792906ff4dd54ae5c6006b08ed8a",
     "scripts/install_codex_team.py": "e030f77f62c6383e47a52fc55386c34f97ba5488876d8ae88f1a4666ca97497b",
@@ -16,5 +16,5 @@
   "integrity": "sha256-manifest",
   "managed_skill": "codex-team",
   "schema_version": 1,
-  "version": "0.4.1"
+  "version": "0.4.2"
 }

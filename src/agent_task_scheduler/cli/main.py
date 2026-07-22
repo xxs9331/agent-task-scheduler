@@ -6,8 +6,10 @@ import argparse
 import json
 import os
 import re
+import signal
 import sys
 import tempfile
+import threading
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +17,7 @@ from typing import Sequence
 from uuid import uuid4
 
 from agent_task_scheduler.core.scheduler import SchedulerCore
+from agent_task_scheduler.lease_guard import LeaseGuard
 from agent_task_scheduler.events import append_observation_event
 from agent_task_scheduler.locking.state_lock import LockTimeoutError, StateLock
 from agent_task_scheduler.migration import MigrationError, migrate_file
@@ -35,6 +38,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         context = discover_project_context(
             current_directory=Path.cwd(), project_root=args.project_root
         )
+        if args.command == "claim" and args.guard:
+            return _claim_guard(args, context)
         receipt = _dispatch(args, context)
         receipt["project"] = {
             "project_id": context.project_id,
@@ -80,6 +85,10 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--worker", required=True)
     command = commands.add_parser("describe")
     command.add_argument("--task", required=True)
+    guard = commands.add_parser("lease-guard")
+    guard.add_argument("--task", required=True)
+    guard.add_argument("--worker", required=True)
+    guard.add_argument("--lease-id", required=True)
     review_correction = commands.add_parser("review-correct")
     review_correction.add_argument("--task", required=True)
     review_correction.add_argument("--reviewer", required=True)
@@ -100,6 +109,8 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--worker", required=True)
         if name in {"claim", "continue"}:
             command.add_argument("--agent-id")
+        if name == "claim":
+            command.add_argument("--guard", action="store_true")
         if name in {"heartbeat", "block", "fail", "complete", "retry"}:
             command.add_argument("--lease-id", required=True)
         if name in {"block", "fail", "retry", "resume"}:
@@ -108,7 +119,9 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--failure-class")
             command.add_argument("--failure-fingerprint")
             command.add_argument("--verification-evidence-json")
-            command.add_argument("--model-escalation-attempted", action="store_true", default=None)
+            command.add_argument(
+                "--model-escalation-attempted", action="store_true", default=None
+            )
         if name in {"retry", "resume"}:
             command.add_argument("--last-attempt-summary", required=True)
             command.add_argument("--next-attempt-instruction", required=True)
@@ -118,6 +131,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _dispatch(args: argparse.Namespace, context: ProjectContext) -> dict[str, object]:
+    if args.command == "lease-guard":
+        return _lease_guard(args, context)
     if args.command == "publish":
         envelope = _read_publish_envelope(args)
         mismatch = _operation_mismatch(envelope, update=args.update)
@@ -136,6 +151,142 @@ def _dispatch(args: argparse.Namespace, context: ProjectContext) -> dict[str, ob
     if args.command == "review-correct":
         return _review_correct(context, args)
     return _lifecycle(args, context)
+
+
+def _lease_guard(
+    args: argparse.Namespace, context: ProjectContext
+) -> dict[str, object]:
+    """Run in the foreground; stdin EOF or an interrupt requests a clean stop."""
+    stop = threading.Event()
+    supervisor_lost = threading.Event()
+    wake = threading.Event()
+    core = SchedulerCore()
+    interval = core.heartbeat_interval_seconds
+
+    def request_stop(_signum: int, _frame: object) -> None:
+        stop.set()
+        wake.set()
+
+    signal.signal(signal.SIGINT, request_stop)
+    signal.signal(signal.SIGTERM, request_stop)
+
+    def watch_supervisor() -> None:
+        # A parent-owned stdin pipe closes on parent/session loss on every supported
+        # platform. This is an identity-bearing capability, unlike a recycled PID.
+        sys.stdin.buffer.read()
+        supervisor_lost.set()
+        wake.set()
+
+    threading.Thread(target=watch_supervisor, daemon=True).start()
+
+    def heartbeat() -> dict[str, object]:
+        with StateLock(context.lock_path):
+            state = _load_state(context.state_path, context.project_id)
+            task = (
+                state.get("tasks", {}).get(args.task)
+                if isinstance(state.get("tasks"), dict)
+                else None
+            )
+            if isinstance(task, dict) and task.get("status") not in {
+                "claimed",
+                "running",
+            }:
+                return {"ok": False, "reason": "terminal_task", "task_id": args.task}
+            receipt = core.heartbeat(
+                state, task_id=args.task, worker_id=args.worker, lease_id=args.lease_id
+            )
+            if receipt["ok"]:
+                _atomic_write(context.state_path, state)
+            return receipt
+
+    events: list[dict[str, object]] = []
+    guard = LeaseGuard(
+        heartbeat,
+        lambda seconds: wake.wait(seconds),
+        lambda: not supervisor_lost.is_set(),
+        events.append,
+        interval,
+        lambda: "supervisor_lost" if supervisor_lost.is_set() else "graceful_stop",
+    )
+    code = guard.run()
+    return {"ok": code == 0, "operation": "lease_guard", "events": events}
+
+
+def _claim_guard(args: argparse.Namespace, context: ProjectContext) -> int:
+    """Claim once, flush its receipt, then guard only that fenced lease."""
+    core = SchedulerCore()
+    with StateLock(context.lock_path):
+        state = _load_state(context.state_path, context.project_id)
+        receipt = core.claim(
+            state, task_id=args.task, worker_id=args.worker, agent_id=args.agent_id
+        )
+        if receipt["ok"]:
+            _atomic_write(context.state_path, state)
+    receipt["project"] = {"project_id": context.project_id, "root": str(context.root)}
+    _emit(receipt)
+    sys.stdout.flush()
+    if not receipt["ok"]:
+        return 1
+
+    stop = threading.Event()
+    lost = threading.Event()
+    wake = threading.Event()
+
+    def signal_stop(_signum: int, _frame: object) -> None:
+        stop.set()
+        wake.set()
+
+    signal.signal(signal.SIGINT, signal_stop)
+    signal.signal(signal.SIGTERM, signal_stop)
+
+    def watch_supervisor() -> None:
+        sys.stdin.buffer.read()
+        lost.set()
+        wake.set()
+
+    threading.Thread(target=watch_supervisor, daemon=True).start()
+
+    def heartbeat() -> dict[str, object]:
+        with StateLock(context.lock_path):
+            current = _load_state(context.state_path, context.project_id)
+            task = (
+                current.get("tasks", {}).get(args.task)
+                if isinstance(current.get("tasks"), dict)
+                else None
+            )
+            if isinstance(task, dict) and task.get("status") not in {
+                "claimed",
+                "running",
+            }:
+                return {"ok": False, "reason": "terminal_task", "task_id": args.task}
+            renewed = core.heartbeat(
+                current,
+                task_id=args.task,
+                worker_id=args.worker,
+                lease_id=str(receipt["lease_id"]),
+            )
+            if renewed["ok"]:
+                _atomic_write(context.state_path, current)
+            return renewed
+
+    events: list[dict[str, object]] = []
+    guard = LeaseGuard(
+        heartbeat,
+        lambda seconds: wake.wait(seconds),
+        lambda: not lost.is_set(),
+        events.append,
+        int(receipt["heartbeat_interval_seconds"]),
+        lambda: "supervisor_lost" if lost.is_set() else "graceful_stop",
+    )
+    code = guard.run()
+    final = {
+        "ok": code == 0,
+        "operation": "lease_guard",
+        "events": events,
+        "project": receipt["project"],
+    }
+    _emit(final)
+    return code
 
 
 def _init(args: argparse.Namespace) -> dict[str, object]:
@@ -348,7 +499,11 @@ def _lifecycle(args: argparse.Namespace, context: ProjectContext) -> dict[str, o
         if command in {"block", "fail", "retry"}:
             kwargs["failure_class"] = args.failure_class
             kwargs["failure_fingerprint"] = args.failure_fingerprint
-            kwargs["verification_evidence"] = json.loads(args.verification_evidence_json) if args.verification_evidence_json else None
+            kwargs["verification_evidence"] = (
+                json.loads(args.verification_evidence_json)
+                if args.verification_evidence_json
+                else None
+            )
             kwargs["model_escalation_attempted"] = args.model_escalation_attempted
         if command == "complete":
             kwargs["summary"] = args.summary

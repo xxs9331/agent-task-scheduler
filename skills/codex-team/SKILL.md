@@ -14,7 +14,7 @@ loaded version, the validated candidate transaction updates the managed private
 launcher and current project together; any local-stage failure restores both
 snapshots and stops startup. A successful version change reports
 `project_updated=true`; stop and begin a fresh Codex session before team startup.
-This updater is bundled in release 0.4.1.
+This updater and the foreground fenced lease guard are bundled in release 0.4.2.
 For first installation, run the bundled relative `scripts/install_codex_team.py`
 installer; it never edits a shell profile. Use `type -a codex-team` to diagnose
 an alias or shell-function shadowing the managed launcher.
@@ -89,6 +89,13 @@ inspect `blocked_candidates` rather than inventing work.
 Completion also requires a non-empty `--summary`. Routine scheduled work ends
 with concise `complete --summary`; use `block --reason` or `fail --reason` when
 appropriate. Do not require extra handoff reports by default.
+
+For long-running scheduled work, the executor uses `scheduler claim --guard`.
+It atomically claims, flushes the claim receipt, then remains foreground-bound to
+its inherited stdin pipe and sends only fenced heartbeats. Pipe loss, terminal
+completion, or a signal stops it; PID existence is not used. Terminal
+reconciliation verifies both task state and guard exit. Waiting gates must not
+retain executor leases.
 
 When a child turn ends, the parent must run `describe` and require terminal
 `done` status, a non-empty summary, a matching lifecycle receipt, and task

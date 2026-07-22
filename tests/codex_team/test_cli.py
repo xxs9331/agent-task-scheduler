@@ -306,7 +306,7 @@ def test_that_init_transactionally_upgrades_a_stock_038_skill_to_039(
 
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == "0.3.8"
-    assert receipt["upgraded_to"] == "0.4.1"
+    assert receipt["upgraded_to"] == "0.4.2"
     assert not (skill.parent / "codex-team.backup").exists()
     assert main(["doctor", str(project)]) == 0
 
@@ -552,7 +552,7 @@ def test_that_init_migrates_a_stock_managed_legacy_skill_to_current(
     assert main(["init", str(project)]) == 0
     receipt = json.loads(capsys.readouterr().out)
     assert receipt["upgraded_from"] == legacy_version
-    assert receipt["upgraded_to"] == "0.4.1"
+    assert receipt["upgraded_to"] == "0.4.2"
     assert main(["doctor", str(project)]) == 0
     assert json.loads(capsys.readouterr().out)["skill"]["current"] is True
     assert not (project / ".agents" / "skills" / "codex-team.backup").exists()
@@ -579,7 +579,7 @@ def test_that_init_replaces_a_modified_managed_legacy_skill(
     skill = _initialize_with_legacy_skill(project, capsys, "0.3.1")
     (skill / "SKILL.md").write_text("modified", encoding="utf-8")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.4.1"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.4.2"
     assert (skill / "SKILL.md").read_text(encoding="utf-8") != "modified"
 
 
@@ -636,7 +636,7 @@ def test_that_init_ignores_transient_pycache_when_migrating_stock_legacy(
     cache.mkdir()
     (cache / "install.cpython-312.pyc").write_bytes(b"transient")
     assert main(["init", str(project)]) == 0
-    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.4.1"
+    assert json.loads(capsys.readouterr().out)["upgraded_to"] == "0.4.2"
 
 
 def test_that_init_rolls_back_a_partial_skill_copy_failure(
@@ -825,7 +825,7 @@ def test_that_doctor_rejects_a_renamed_wheel_with_mismatched_metadata(
         / "skills"
         / "codex-team"
         / "assets"
-        / "agent_task_scheduler-0.4.1-py3-none-any.whl",
+        / "agent_task_scheduler-0.4.2-py3-none-any.whl",
         wheel,
     )
 

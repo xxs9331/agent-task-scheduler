@@ -16,7 +16,7 @@ history, and optional observation logs isolated inside each project.
 
 ## Portable Codex Team
 
-### Safe updates in 0.4.1
+### Safe updates in 0.4.2
 
 `codex-team update-policy` reports the default `notify` policy without mutation.
 Only `codex-team update-policy auto` explicitly permits automatic updates; `off`
@@ -32,7 +32,7 @@ does not—and must not claim to—have a post-install hook. Restart Codex, then
 it in any project to “install codex-team and bootstrap team mode.” The Skill runs
 its own relative `scripts/install_codex_team.py`; the user never needs to clone
 this repository, copy files, or discover a plugin-cache path. The installer uses
-the bundled 0.4.1 wheel to create a private user environment and managed launcher,
+the bundled 0.4.2 wheel to create a private user environment and managed launcher,
 emits a JSON receipt, and never edits PATH, shell profiles, or plugin files. If
 the receipt says the bin directory is absent from PATH, apply its one-time hint in
 the current shell. After installation, run `type -a codex-team`; if an old shell
@@ -47,7 +47,7 @@ self-report parent-only fields; missing parent evidence still fails closed.
 Every project uses the one latest team configuration and Skill bundled with
 `codex-team`. `doctor` requires the managed configuration to be semantically
 identical to the current template. `init` transactionally upgrades a differing
-older configuration and Skill to 0.4.1. After a successful transactional upgrade,
+older configuration and Skill to 0.4.2. After a successful transactional upgrade,
 the project keeps exactly `.agents/skills/codex-team` and removes legacy
 `.agents/skills/global-scheduler` and `.agents/skills/codex-team-staff`. Bare `codex-team`/`start` performs this
 upgrade before launching Codex; a failed upgrade rolls back the managed files

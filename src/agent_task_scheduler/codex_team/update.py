@@ -15,23 +15,31 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 
-CURRENT_VERSION = "0.4.1"
+CURRENT_VERSION = "0.4.2"
 MARKETPLACE = "xxs9331-scheduler"
 PLUGIN = "global-scheduler"
 POLICIES = frozenset({"auto", "notify", "off"})
-_VERSION = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:[-+][0-9A-Za-z.-]+)?$")
+_VERSION = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:[-+][0-9A-Za-z.-]+)?$"
+)
 _UNAVAILABLE_WARNING: dict[str, object] | None = None
 
 
 def _version(value: object) -> tuple[int, int, int] | None:
     if not isinstance(value, str) or not _VERSION.fullmatch(value):
         return None
-    return tuple(int(part) for part in value.split("-", 1)[0].split("+", 1)[0].split("."))  # type: ignore[return-value]
+    return tuple(
+        int(part) for part in value.split("-", 1)[0].split("+", 1)[0].split(".")
+    )  # type: ignore[return-value]
 
 
 def is_strictly_newer(candidate: object, current: object = CURRENT_VERSION) -> bool:
     candidate_value, current_value = _version(candidate), _version(current)
-    return candidate_value is not None and current_value is not None and candidate_value > current_value
+    return (
+        candidate_value is not None
+        and current_value is not None
+        and candidate_value > current_value
+    )
 
 
 def metadata_path(prefix: Path) -> Path:
@@ -53,7 +61,9 @@ def write_policy(prefix: Path, policy: str) -> dict[str, object]:
     target = metadata_path(prefix)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(".tmp")
-    temporary.write_text(json.dumps({"policy": policy}, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps({"policy": policy}, sort_keys=True) + "\n", encoding="utf-8"
+    )
     temporary.replace(target)
     return {"ok": True, "operation": "update-policy", "update_policy": policy}
 
@@ -61,7 +71,11 @@ def write_policy(prefix: Path, policy: str) -> dict[str, object]:
 def _wheel_version(wheel: Path) -> str | None:
     try:
         with zipfile.ZipFile(wheel) as archive:
-            names = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
+            names = [
+                name
+                for name in archive.namelist()
+                if name.endswith(".dist-info/METADATA")
+            ]
             if len(names) != 1:
                 return None
             for line in archive.read(names[0]).decode("utf-8").splitlines():
@@ -85,26 +99,40 @@ def validate_candidate(candidate: object, *, cache_root: Path) -> tuple[bool, st
         root = cache_root.resolve(strict=True)
     except (KeyError, OSError):
         return False, "UPDATE_CANDIDATE_PATH_INVALID"
-    if root not in skill_root.parents or root not in wheel.parents or wheel.is_symlink():
+    if (
+        root not in skill_root.parents
+        or root not in wheel.parents
+        or wheel.is_symlink()
+    ):
         return False, "UPDATE_CANDIDATE_PATH_INVALID"
     marker = skill_root / "assets" / "managed-skill.json"
     try:
         manifest = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False, "UPDATE_CANDIDATE_MANIFEST_INVALID"
-    if not isinstance(manifest, dict) or manifest.get("managed_skill") != "codex-team" or manifest.get("version") != version:
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("managed_skill") != "codex-team"
+        or manifest.get("version") != version
+    ):
         return False, "UPDATE_CANDIDATE_MANIFEST_INVALID"
     files = manifest.get("files")
     if not isinstance(files, dict) or any(
-        not isinstance(path, str) or not isinstance(digest, str) or ".." in Path(path).parts
-        or not (skill_root / path).is_file() or sha256((skill_root / path).read_bytes()).hexdigest() != digest
+        not isinstance(path, str)
+        or not isinstance(digest, str)
+        or ".." in Path(path).parts
+        or not (skill_root / path).is_file()
+        or sha256((skill_root / path).read_bytes()).hexdigest() != digest
         for path, digest in files.items()
     ):
         return False, "UPDATE_CANDIDATE_MANIFEST_INVALID"
     bundled = sorted((skill_root / "assets").glob("agent_task_scheduler-*.whl"))
     if bundled != [wheel] or _wheel_version(wheel) != version:
         return False, "UPDATE_CANDIDATE_WHEEL_INVALID"
-    if not all((skill_root / relative).is_file() for relative in ("scripts/install.py", "scripts/install_codex_team.py")):
+    if not all(
+        (skill_root / relative).is_file()
+        for relative in ("scripts/install.py", "scripts/install_codex_team.py")
+    ):
         return False, "UPDATE_CANDIDATE_LAYOUT_INVALID"
     return True, "OK"
 
@@ -127,9 +155,25 @@ class UpdatePreflight:
         global _UNAVAILABLE_WARNING
         policy = read_policy(self.prefix)
         if policy == "off":
-            return {"ok": True, "operation": "update-preflight", "update_policy": policy, "checked": False}
+            return {
+                "ok": True,
+                "operation": "update-preflight",
+                "update_policy": policy,
+                "checked": False,
+            }
         try:
-            completed = _run(["codex", "plugin", "marketplace", "upgrade", MARKETPLACE, "--dry-run", "--json"], runner=self.runner)
+            completed = _run(
+                [
+                    "codex",
+                    "plugin",
+                    "marketplace",
+                    "upgrade",
+                    MARKETPLACE,
+                    "--dry-run",
+                    "--json",
+                ],
+                runner=self.runner,
+            )
             if completed.returncode != 0:
                 raise RuntimeError("marketplace discovery failed")
             candidate = json.loads(completed.stdout)
@@ -141,17 +185,46 @@ class UpdatePreflight:
             subprocess.TimeoutExpired,
         ) as error:
             if _UNAVAILABLE_WARNING is None:
-                _UNAVAILABLE_WARNING = {"warning": "UPDATE_CHECK_UNAVAILABLE", "message": str(error)}
-            return {"ok": True, "operation": "update-preflight", "update_policy": policy, **_UNAVAILABLE_WARNING}
+                _UNAVAILABLE_WARNING = {
+                    "warning": "UPDATE_CHECK_UNAVAILABLE",
+                    "message": str(error),
+                }
+            return {
+                "ok": True,
+                "operation": "update-preflight",
+                "update_policy": policy,
+                **_UNAVAILABLE_WARNING,
+            }
         valid, code = validate_candidate(candidate, cache_root=self.cache_root)
         if code == "UPDATE_CANDIDATE_NOT_FORWARD":
-            return {"ok": True, "operation": "update-preflight", "update_policy": policy, "available": False}
+            return {
+                "ok": True,
+                "operation": "update-preflight",
+                "update_policy": policy,
+                "available": False,
+            }
         if not valid:
-            return {"ok": True, "operation": "update-preflight", "update_policy": policy, "warning": code}
+            return {
+                "ok": True,
+                "operation": "update-preflight",
+                "update_policy": policy,
+                "warning": code,
+            }
         if policy == "notify":
-            return {"ok": True, "operation": "update-preflight", "update_policy": policy, "available": True, "update_required": True, "updated_from": CURRENT_VERSION, "updated_to": candidate["version"]}
+            return {
+                "ok": True,
+                "operation": "update-preflight",
+                "update_policy": policy,
+                "available": True,
+                "update_required": True,
+                "updated_from": CURRENT_VERSION,
+                "updated_to": candidate["version"],
+            }
         try:
-            upgraded = _run(["codex", "plugin", "marketplace", "upgrade", MARKETPLACE, "--json"], runner=self.runner)
+            upgraded = _run(
+                ["codex", "plugin", "marketplace", "upgrade", MARKETPLACE, "--json"],
+                runner=self.runner,
+            )
             if upgraded.returncode != 0:
                 raise RuntimeError("marketplace upgrade failed")
             # The update command may have replaced the staged tree.  Do not execute
@@ -160,7 +233,13 @@ class UpdatePreflight:
             if not valid:
                 raise RuntimeError(code)
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
-            return {"ok": True, "operation": "update-preflight", "update_policy": policy, "warning": "UPDATE_APPLY_UNAVAILABLE", "message": str(error)}
+            return {
+                "ok": True,
+                "operation": "update-preflight",
+                "update_policy": policy,
+                "warning": "UPDATE_APPLY_UNAVAILABLE",
+                "message": str(error),
+            }
         return self._install_candidate(candidate)
 
     def _install_candidate(self, candidate: dict[str, object]) -> dict[str, object]:
@@ -173,13 +252,32 @@ class UpdatePreflight:
         project_root = (self.project_root or Path.cwd()).resolve()
         skill_root = Path(str(candidate["skill_root"])).resolve()
         targets = (self.prefix / ".codex-team", self.prefix / "bin" / "codex-team")
-        project_targets = tuple(project_root / relative for relative in (".agents", ".codex", ".scheduler", ".venv"))
+        project_targets = tuple(
+            project_root / relative
+            for relative in (".agents", ".codex", ".scheduler", ".venv")
+        )
         with tempfile.TemporaryDirectory(prefix="codex-team-update-") as temporary:
             backup_root = Path(temporary)
             snapshots = _snapshot((*targets, *project_targets), backup_root)
             stages = (
-                ("launcher", [sys.executable, str(skill_root / "scripts" / "install_codex_team.py"), "--prefix", str(self.prefix)]),
-                ("project", [sys.executable, str(skill_root / "scripts" / "install.py"), "--project-root", str(project_root)]),
+                (
+                    "launcher",
+                    [
+                        sys.executable,
+                        str(skill_root / "scripts" / "install_codex_team.py"),
+                        "--prefix",
+                        str(self.prefix),
+                    ],
+                ),
+                (
+                    "project",
+                    [
+                        sys.executable,
+                        str(skill_root / "scripts" / "install.py"),
+                        "--project-root",
+                        str(project_root),
+                    ],
+                ),
             )
             for stage, command in stages:
                 try:
@@ -260,4 +358,6 @@ def default_runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
     # validated local installer may create a venv, so it gets a separate bounded
     # allowance.
     timeout = 30 if command and Path(command[0]).name.startswith("python") else 2
-    return subprocess.run(list(command), check=False, text=True, capture_output=True, timeout=timeout)
+    return subprocess.run(
+        list(command), check=False, text=True, capture_output=True, timeout=timeout
+    )

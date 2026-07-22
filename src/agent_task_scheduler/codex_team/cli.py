@@ -38,7 +38,7 @@ _CANONICAL_AGENT_FILES = frozenset(
         "window_d.toml",
     }
 )
-_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.4.1-py3-none-any.whl"
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.4.2-py3-none-any.whl"
 _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     {
         "agent_task_scheduler-0.3.1-py3-none-any.whl",
@@ -52,7 +52,7 @@ _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     }
 )
 _SUPPORTED_SKILL_WHEELS = {
-    _BUNDLED_WHEEL_NAME: "0.4.1",
+    _BUNDLED_WHEEL_NAME: "0.4.2",
     **{wheel: wheel.split("-")[1] for wheel in _SUPPORTED_LEGACY_WHEEL_NAMES},
 }
 _REQUIRED_SKILL_FILES = (
@@ -106,9 +106,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "update-policy":
         prefix = _managed_prefix()
         try:
-            receipt = write_policy(prefix, args.policy) if args.policy else {
-                "ok": True, "operation": "update-policy", "update_policy": read_policy(prefix)
-            }
+            receipt = (
+                write_policy(prefix, args.policy)
+                if args.policy
+                else {
+                    "ok": True,
+                    "operation": "update-policy",
+                    "update_policy": read_policy(prefix),
+                }
+            )
         except ValueError as error:
             receipt = _failure("CODEX_TEAM_UPDATE_POLICY_INVALID", str(error), [])
         return _emit(receipt, exit_code=0 if receipt["ok"] else 2)
@@ -160,13 +166,19 @@ def _commands() -> tuple[str, ...]:
 
 
 def _managed_prefix() -> Path:
-    return Path(os.environ.get("CODEX_TEAM_PREFIX", site.getuserbase())).expanduser().resolve()
+    return (
+        Path(os.environ.get("CODEX_TEAM_PREFIX", site.getuserbase()))
+        .expanduser()
+        .resolve()
+    )
 
 
 def _update_preflight(project_root: Path) -> dict[str, object]:
     return UpdatePreflight(
         prefix=_managed_prefix(),
-        cache_root=Path(os.environ.get("CODEX_PLUGIN_CACHE", Path.home() / ".codex" / "plugins")),
+        cache_root=Path(
+            os.environ.get("CODEX_PLUGIN_CACHE", Path.home() / ".codex" / "plugins")
+        ),
         runner=default_runner,
         project_root=project_root,
     ).check()
@@ -310,7 +322,7 @@ def _init(root: Path) -> dict[str, object]:
     for legacy_backup in legacy_backups:
         if legacy_backup.exists():
             shutil.rmtree(legacy_backup)
-    upgraded_to = "0.4.1" if skill_existed and replaced_skill else None
+    upgraded_to = "0.4.2" if skill_existed and replaced_skill else None
     return {
         "ok": True,
         "operation": "init",
@@ -390,8 +402,7 @@ def _start(root: Path, *, role: str | None) -> int:
             ".codex/TEAM_MODE_V2_PM_HANDOFF.md), CLAUDE.md, AGENTS.md, and "
             "the concise unified codex-team Skill plus its complete PM-only "
             "references/orchestrator.md, then directly native-spawn product_manager "
-            "with fork_turns=none. "
-            + _PARENT_ATTESTATION_PROTOCOL
+            "with fork_turns=none. " + _PARENT_ATTESTATION_PROTOCOL
         )
         command = ["codex", "-C", str(root), prompt]
     else:
@@ -475,7 +486,7 @@ def _skill_status(skill_root: Path) -> tuple[str, str | None]:
             )
         except (OSError, json.JSONDecodeError):
             return "invalid", wheel_name
-        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.4.1":
+        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.4.2":
             return "invalid", wheel_name
         source = _skill_source().resolve()
         if skill_root.resolve() != source and not _same_skill_tree(skill_root, source):

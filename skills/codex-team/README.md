@@ -2,7 +2,14 @@
 
 This Skill is distributable instructions for an installed `agent-task-scheduler` CLI. It stores no task data and never edits JSON state directly.
 
-## Safe updater (0.4.1)
+## Safe updater and claim-bound lease guard (0.4.2)
+
+For long-running scheduled work, the executor starts with `scheduler claim
+--guard`. The command emits the successful claim receipt, then remains in the
+same foreground session and renews only with fenced heartbeat. Stdin/session
+loss, terminal state, stale or expired lease, and heartbeat rejection stop it.
+The PM reconciles terminal task state and confirms no guard remains; gates do
+not retain executor leases.
 
 `codex-team update-policy` reports the default `notify` policy. Set `auto` only
 after a deliberate one-time choice (`codex-team update-policy auto`); set `off`

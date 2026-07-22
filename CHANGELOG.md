@@ -1,5 +1,10 @@
 # Changelog
 
+### 0.4.2
+
+- Adds a fenced foreground lease guard, deterministic renewal recommendations,
+  and observable active/near-expiry/expired lease health.
+
 ## Unreleased
 
 ### 0.4.1

@@ -59,6 +59,11 @@ class LifecycleService:
 
     def status(self, state: State) -> Receipt:
         tasks = self._tasks(state)
+        lease_health = [
+            self._lease_health(task_id, task)
+            for task_id, task in tasks.items()
+            if task.get("status") in _ACTIVE_STATUSES
+        ]
         return {
             "ok": True,
             "tasks": {
@@ -72,6 +77,7 @@ class LifecycleService:
                 for task_id, task in tasks.items()
                 if self._is_active_lease(task)
             ],
+            "lease_health": lease_health,
             "escalation_candidates": self._escalation_candidates(state, tasks),
         }
 
@@ -239,8 +245,13 @@ class LifecycleService:
         if "ok" in task:
             return task
         failure = self._failure_record(
-            task, worker_id, "retry", failure_class, failure_fingerprint,
-            verification_evidence, model_escalation_attempted,
+            task,
+            worker_id,
+            "retry",
+            failure_class,
+            failure_fingerprint,
+            verification_evidence,
+            model_escalation_attempted,
         )
         if failure is not None:
             return failure
@@ -361,7 +372,18 @@ class LifecycleService:
         verification_evidence: object | None = None,
         model_escalation_attempted: bool | None = None,
     ) -> Receipt:
-        return self._terminal(state, task_id, worker_id, lease_id, reason, "blocked", failure_class, failure_fingerprint, verification_evidence, model_escalation_attempted)
+        return self._terminal(
+            state,
+            task_id,
+            worker_id,
+            lease_id,
+            reason,
+            "blocked",
+            failure_class,
+            failure_fingerprint,
+            verification_evidence,
+            model_escalation_attempted,
+        )
 
     def fail(
         self,
@@ -376,7 +398,18 @@ class LifecycleService:
         verification_evidence: object | None = None,
         model_escalation_attempted: bool | None = None,
     ) -> Receipt:
-        return self._terminal(state, task_id, worker_id, lease_id, reason, "failed", failure_class, failure_fingerprint, verification_evidence, model_escalation_attempted)
+        return self._terminal(
+            state,
+            task_id,
+            worker_id,
+            lease_id,
+            reason,
+            "failed",
+            failure_class,
+            failure_fingerprint,
+            verification_evidence,
+            model_escalation_attempted,
+        )
 
     def release_expired(self, state: State) -> Receipt:
         tasks = self._tasks(state)
@@ -412,7 +445,15 @@ class LifecycleService:
         task = self._owned_task(state, task_id, worker_id, lease_id)
         if "ok" in task:
             return task
-        failure = self._failure_record(task, worker_id, status, failure_class, failure_fingerprint, verification_evidence, model_escalation_attempted)
+        failure = self._failure_record(
+            task,
+            worker_id,
+            status,
+            failure_class,
+            failure_fingerprint,
+            verification_evidence,
+            model_escalation_attempted,
+        )
         if failure is not None:
             return failure
         attempt = _int_value(task.get("attempt"))
@@ -441,25 +482,65 @@ class LifecycleService:
         return receipt
 
     def _failure_record(
-        self, task: Task, worker_id: str, transition: str,
-        failure_class: str | None, failure_fingerprint: str | None,
-        verification_evidence: object | None, model_escalation_attempted: bool | None,
+        self,
+        task: Task,
+        worker_id: str,
+        transition: str,
+        failure_class: str | None,
+        failure_fingerprint: str | None,
+        verification_evidence: object | None,
+        model_escalation_attempted: bool | None,
     ) -> Receipt | None:
         if (failure_class is None) != (failure_fingerprint is None):
-            return {"ok": False, "reason": "failure_fields_must_be_paired", "task_id": task.get("task_id")}
-        if failure_class is not None and (not failure_class.strip() or not failure_fingerprint or not failure_fingerprint.strip()):
-            return {"ok": False, "reason": "failure_fields_must_be_meaningful", "task_id": task.get("task_id")}
-        if model_escalation_attempted is not None and not isinstance(model_escalation_attempted, bool):
-            return {"ok": False, "reason": "model_escalation_must_be_boolean", "task_id": task.get("task_id")}
+            return {
+                "ok": False,
+                "reason": "failure_fields_must_be_paired",
+                "task_id": task.get("task_id"),
+            }
+        if failure_class is not None and (
+            not failure_class.strip()
+            or not failure_fingerprint
+            or not failure_fingerprint.strip()
+        ):
+            return {
+                "ok": False,
+                "reason": "failure_fields_must_be_meaningful",
+                "task_id": task.get("task_id"),
+            }
+        if model_escalation_attempted is not None and not isinstance(
+            model_escalation_attempted, bool
+        ):
+            return {
+                "ok": False,
+                "reason": "model_escalation_must_be_boolean",
+                "task_id": task.get("task_id"),
+            }
         if failure_fingerprint is None:
             return None
         history = task.setdefault("failure_history", [])
         if not isinstance(history, list):
-            return {"ok": False, "reason": "failure_history_invalid", "task_id": task.get("task_id")}
-        history.append({"attempt": _int_value(task.get("attempt")), "worker": worker_id, "transition": transition, "occurred_at": self._iso_now(), "failure_class": failure_class, "failure_fingerprint": failure_fingerprint, "verification_evidence": verification_evidence, "model_escalation_attempted": model_escalation_attempted})
+            return {
+                "ok": False,
+                "reason": "failure_history_invalid",
+                "task_id": task.get("task_id"),
+            }
+        history.append(
+            {
+                "attempt": _int_value(task.get("attempt")),
+                "worker": worker_id,
+                "transition": transition,
+                "occurred_at": self._iso_now(),
+                "failure_class": failure_class,
+                "failure_fingerprint": failure_fingerprint,
+                "verification_evidence": verification_evidence,
+                "model_escalation_attempted": model_escalation_attempted,
+            }
+        )
         return None
 
-    def _escalation_candidates(self, state: State, tasks: dict[str, Task]) -> list[Receipt]:
+    def _escalation_candidates(
+        self, state: State, tasks: dict[str, Task]
+    ) -> list[Receipt]:
         candidates: list[Receipt] = []
         staff = self._staff_profiles(state)
         for task_id, task in tasks.items():
@@ -467,13 +548,43 @@ class LifecycleService:
             if isinstance(history, list):
                 fingerprints: dict[str, list[object]] = {}
                 for event in history:
-                    if isinstance(event, MutableMapping) and isinstance(event.get("failure_fingerprint"), str) and event["failure_fingerprint"]:
-                        fingerprints.setdefault(event["failure_fingerprint"], []).append(event)
+                    if (
+                        isinstance(event, MutableMapping)
+                        and isinstance(event.get("failure_fingerprint"), str)
+                        and event["failure_fingerprint"]
+                    ):
+                        fingerprints.setdefault(
+                            event["failure_fingerprint"], []
+                        ).append(event)
                 for fingerprint, events in fingerprints.items():
-                    attempts = {event.get("attempt") for event in events if isinstance(event, MutableMapping)}
+                    attempts = {
+                        event.get("attempt")
+                        for event in events
+                        if isinstance(event, MutableMapping)
+                    }
                     if len(attempts) >= 2:
-                        candidates.append(self._candidate(task_id, task, "repeated_failure", {"failure_fingerprint": fingerprint, "attempts": sorted(attempt for attempt in attempts if isinstance(attempt, int)), "failure_events": events}))
-            if task.get("status") in _CLAIMABLE_STATUSES and not self._dependencies_done(task, tasks) and self._active_conflict(task_id, task, tasks) is None and not self._is_active_lease(task):
+                        candidates.append(
+                            self._candidate(
+                                task_id,
+                                task,
+                                "repeated_failure",
+                                {
+                                    "failure_fingerprint": fingerprint,
+                                    "attempts": sorted(
+                                        attempt
+                                        for attempt in attempts
+                                        if isinstance(attempt, int)
+                                    ),
+                                    "failure_events": events,
+                                },
+                            )
+                        )
+            if (
+                task.get("status") in _CLAIMABLE_STATUSES
+                and not self._dependencies_done(task, tasks)
+                and self._active_conflict(task_id, task, tasks) is None
+                and not self._is_active_lease(task)
+            ):
                 if not any(
                     bool(profile.get("can_execute_tasks", False))
                     and self._profile_filter_reason(task, worker, profile) is None
@@ -486,23 +597,73 @@ class LifecycleService:
                     )
                     for worker, profile in staff.items()
                 ):
-                    candidates.append(self._candidate(task_id, task, "no_eligible_worker", {"workers_checked": sorted(staff)}))
+                    candidates.append(
+                        self._candidate(
+                            task_id,
+                            task,
+                            "no_eligible_worker",
+                            {"workers_checked": sorted(staff)},
+                        )
+                    )
         return candidates
 
     def _missing_profile_metadata(self, task: Task, profile: Task) -> list[str]:
         requirements = profile.get("required_metadata_by_kind", {})
-        paths = requirements.get(_task_kind(task), []) if isinstance(requirements, MutableMapping) else []
-        return [path for path in paths if isinstance(path, str) and not _meaningful_metadata_value(_metadata_value(task, path))]
+        paths = (
+            requirements.get(_task_kind(task), [])
+            if isinstance(requirements, MutableMapping)
+            else []
+        )
+        return [
+            path
+            for path in paths
+            if isinstance(path, str)
+            and not _meaningful_metadata_value(_metadata_value(task, path))
+        ]
 
-    def _candidate(self, task_id: str, task: Task, trigger: str, evidence: Receipt) -> Receipt:
-        metadata = task.get("metadata") if isinstance(task.get("metadata"), MutableMapping) else {}
-        team_mode = metadata.get("team_mode") if isinstance(metadata, MutableMapping) and isinstance(metadata.get("team_mode"), MutableMapping) else {}
-        fallback = metadata.get("fallback_authorization") if isinstance(metadata, MutableMapping) and isinstance(metadata.get("fallback_authorization"), MutableMapping) else {}
-        required = ("original_task_id", "blocking_evidence", "model_escalation_attempted", "user_authorization", "r_evidence", "writable_scope", "return_gate_task_id")
+    def _candidate(
+        self, task_id: str, task: Task, trigger: str, evidence: Receipt
+    ) -> Receipt:
+        metadata = (
+            task.get("metadata")
+            if isinstance(task.get("metadata"), MutableMapping)
+            else {}
+        )
+        team_mode = (
+            metadata.get("team_mode")
+            if isinstance(metadata, MutableMapping)
+            and isinstance(metadata.get("team_mode"), MutableMapping)
+            else {}
+        )
+        fallback = (
+            metadata.get("fallback_authorization")
+            if isinstance(metadata, MutableMapping)
+            and isinstance(metadata.get("fallback_authorization"), MutableMapping)
+            else {}
+        )
+        required = (
+            "original_task_id",
+            "blocking_evidence",
+            "model_escalation_attempted",
+            "user_authorization",
+            "r_evidence",
+            "writable_scope",
+            "return_gate_task_id",
+        )
         missing = list(required) if trigger == "repeated_failure" else []
         if trigger == "repeated_failure":
             missing = [field for field in required if not fallback.get(field)]
-        return {"task_id": task_id, "trigger": trigger, "evidence": evidence, "original_worker": task.get("last_owner") or task.get("owner"), "writable_scope": task.get("writable_files", []), "batch_id": team_mode.get("batch_id"), "workstream": team_mode.get("workstream"), "missing_requirements": missing, "actionable": False}
+        return {
+            "task_id": task_id,
+            "trigger": trigger,
+            "evidence": evidence,
+            "original_worker": task.get("last_owner") or task.get("owner"),
+            "writable_scope": task.get("writable_files", []),
+            "batch_id": team_mode.get("batch_id"),
+            "workstream": team_mode.get("workstream"),
+            "missing_requirements": missing,
+            "actionable": False,
+        }
 
     def _tasks(self, state: State) -> dict[str, Task]:
         raw_tasks = state.get("tasks")
@@ -782,6 +943,30 @@ class LifecycleService:
             "lease_id": task.get("lease_id"),
             "attempt": task.get("attempt"),
             "lease_metadata": task.get("lease_metadata", {}),
+            "heartbeat_interval_seconds": self.heartbeat_interval_seconds,
+        }
+
+    @property
+    def heartbeat_interval_seconds(self) -> int:
+        """Return a conservative, deterministic interval strictly below the lease."""
+        seconds = int(self._lease_duration.total_seconds())
+        return max(1, (seconds - 1) // 3) if seconds > 1 else 0
+
+    def _lease_health(self, task_id: str, task: Task) -> Receipt:
+        expiry = _parse_datetime(task.get("lease_expires_at"))
+        remaining = (expiry - self._now()).total_seconds() if expiry else 0.0
+        if expiry is None or remaining <= 0:
+            health = "expired"
+        elif remaining <= self.heartbeat_interval_seconds:
+            health = "near_expiry"
+        else:
+            health = "active"
+        return {
+            "task_id": task_id,
+            "owner": task.get("owner"),
+            "lease_expires_at": task.get("lease_expires_at"),
+            "remaining_seconds": remaining,
+            "health": health,
         }
 
     def _clear_lease(self, task: Task) -> None:

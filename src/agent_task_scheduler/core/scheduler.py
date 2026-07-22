@@ -13,6 +13,10 @@ class SchedulerCore:
     def __init__(self, lifecycle: LifecycleService | None = None) -> None:
         self._lifecycle = lifecycle or LifecycleService()
 
+    @property
+    def heartbeat_interval_seconds(self) -> int:
+        return self._lifecycle.heartbeat_interval_seconds
+
     def claim(
         self,
         state: MutableMapping[str, object],
@@ -89,7 +93,8 @@ class SchedulerCore:
             reason=reason,
             last_attempt_summary=last_attempt_summary,
             next_attempt_instruction=next_attempt_instruction,
-            failure_class=failure_class, failure_fingerprint=failure_fingerprint,
+            failure_class=failure_class,
+            failure_fingerprint=failure_fingerprint,
             verification_evidence=verification_evidence,
             model_escalation_attempted=model_escalation_attempted,
         )
@@ -144,7 +149,8 @@ class SchedulerCore:
             worker_id=worker_id,
             lease_id=lease_id,
             reason=reason,
-            failure_class=failure_class, failure_fingerprint=failure_fingerprint,
+            failure_class=failure_class,
+            failure_fingerprint=failure_fingerprint,
             verification_evidence=verification_evidence,
             model_escalation_attempted=model_escalation_attempted,
         )
@@ -168,7 +174,8 @@ class SchedulerCore:
             worker_id=worker_id,
             lease_id=lease_id,
             reason=reason,
-            failure_class=failure_class, failure_fingerprint=failure_fingerprint,
+            failure_class=failure_class,
+            failure_fingerprint=failure_fingerprint,
             verification_evidence=verification_evidence,
             model_escalation_attempted=model_escalation_attempted,
         )

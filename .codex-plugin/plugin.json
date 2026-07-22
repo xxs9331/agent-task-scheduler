@@ -1,6 +1,6 @@
 {
   "name": "global-scheduler",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Codex Team workflows with project-scoped scheduler lifecycle, offline bootstrap, native role attestation, continuity, reconciliation, and recovery guidance.",
   "author": {
     "name": "xxs9331"
