@@ -1,5 +1,19 @@
 # Bootstrap and project initialization
 
+## Update preflight
+
+Before `init`, `doctor`, or `start`, 0.4.1 checks the persisted update policy.
+`off` does nothing; `notify` emits an available-version receipt without writes;
+and explicit `auto` may upgrade only a validated marketplace candidate. Auto
+first validates identity, managed-file hashes, wheel layout, and both relative
+installer entrypoints. It then uses fresh subprocesses to upgrade the private
+managed launcher and this current project only. Those two local stages are
+transactional: a failure restores the last validated launcher and project
+snapshot, emits a machine-readable failure receipt, and never continues
+startup. A version-changing success has `project_updated=true` and
+`restart_required=true`: do not proceed to startup until a fresh Codex session
+loads the new Skill.
+
 ## First install: user command
 
 Installing a Codex plugin does not run a supported post-install hook. After the

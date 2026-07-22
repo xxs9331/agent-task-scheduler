@@ -4,13 +4,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
+import site
 import subprocess
 import sys
 import tomllib
 import zipfile
 from collections.abc import Sequence
 from pathlib import Path
+
+from agent_task_scheduler.codex_team.update import (
+    UpdatePreflight,
+    default_runner,
+    read_policy,
+    write_policy,
+)
 
 _ROLES = {
     "role-A": ("role-a", "window_a"),
@@ -29,7 +38,7 @@ _CANONICAL_AGENT_FILES = frozenset(
         "window_d.toml",
     }
 )
-_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.4.0-py3-none-any.whl"
+_BUNDLED_WHEEL_NAME = "agent_task_scheduler-0.4.1-py3-none-any.whl"
 _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     {
         "agent_task_scheduler-0.3.1-py3-none-any.whl",
@@ -43,7 +52,7 @@ _SUPPORTED_LEGACY_WHEEL_NAMES = frozenset(
     }
 )
 _SUPPORTED_SKILL_WHEELS = {
-    _BUNDLED_WHEEL_NAME: "0.4.0",
+    _BUNDLED_WHEEL_NAME: "0.4.1",
     **{wheel: wheel.split("-")[1] for wheel in _SUPPORTED_LEGACY_WHEEL_NAMES},
 }
 _REQUIRED_SKILL_FILES = (
@@ -84,6 +93,8 @@ _PARENT_ATTESTATION_PROTOCOL = (
 
 def main(argv: Sequence[str] | None = None) -> int:
     raw_arguments = list(argv) if argv is not None else sys.argv[1:]
+    if len(raw_arguments) == 2 and raw_arguments[0] == "update-policy":
+        raw_arguments = ["update-policy", "--policy", raw_arguments[1]]
     if (
         raw_arguments
         and raw_arguments[0] not in _commands()
@@ -92,7 +103,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         raw_arguments.insert(0, "start")
     args = _parser().parse_args(raw_arguments)
     root = _resolve_root(args.project_root)
+    if args.command == "update-policy":
+        prefix = _managed_prefix()
+        try:
+            receipt = write_policy(prefix, args.policy) if args.policy else {
+                "ok": True, "operation": "update-policy", "update_policy": read_policy(prefix)
+            }
+        except ValueError as error:
+            receipt = _failure("CODEX_TEAM_UPDATE_POLICY_INVALID", str(error), [])
+        return _emit(receipt, exit_code=0 if receipt["ok"] else 2)
+    # A conflicting/corrupt scheduler root is never safe to probe externally.
+    # Reject it before update discovery so `start` remains fail-closed.
+    scheduler_conflict = _scheduler_conflict(root)
+    if scheduler_conflict is not None:
+        return _emit(scheduler_conflict, exit_code=2)
     if args.command == "init":
+        preflight = _update_preflight(root)
+        if preflight.get("restart_required"):
+            return _emit(preflight)
         try:
             receipt = _init(root)
         except Exception as error:
@@ -106,6 +134,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         diagnosis = _doctor(root)
     if not diagnosis["ok"]:
         return _emit(diagnosis, exit_code=2)
+    preflight = _update_preflight(root)
+    if preflight.get("restart_required"):
+        return _emit(preflight)
     if args.command == "doctor":
         return _emit(diagnosis)
     return _start(root, role=args.command if args.command in _ROLES else None)
@@ -120,11 +151,25 @@ def _parser() -> argparse.ArgumentParser:
         choices=_commands(),
     )
     parser.add_argument("project_root", nargs="?", type=Path)
+    parser.add_argument("--policy", choices=("auto", "notify", "off"))
     return parser
 
 
 def _commands() -> tuple[str, ...]:
-    return ("init", "doctor", "start", *_ROLES)
+    return ("init", "doctor", "start", "update-policy", *_ROLES)
+
+
+def _managed_prefix() -> Path:
+    return Path(os.environ.get("CODEX_TEAM_PREFIX", site.getuserbase())).expanduser().resolve()
+
+
+def _update_preflight(project_root: Path) -> dict[str, object]:
+    return UpdatePreflight(
+        prefix=_managed_prefix(),
+        cache_root=Path(os.environ.get("CODEX_PLUGIN_CACHE", Path.home() / ".codex" / "plugins")),
+        runner=default_runner,
+        project_root=project_root,
+    ).check()
 
 
 def _resolve_root(project_root: Path | None) -> Path:
@@ -265,7 +310,7 @@ def _init(root: Path) -> dict[str, object]:
     for legacy_backup in legacy_backups:
         if legacy_backup.exists():
             shutil.rmtree(legacy_backup)
-    upgraded_to = "0.4.0" if skill_existed and replaced_skill else None
+    upgraded_to = "0.4.1" if skill_existed and replaced_skill else None
     return {
         "ok": True,
         "operation": "init",
@@ -430,7 +475,7 @@ def _skill_status(skill_root: Path) -> tuple[str, str | None]:
             )
         except (OSError, json.JSONDecodeError):
             return "invalid", wheel_name
-        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.4.0":
+        if not isinstance(marker_data, dict) or marker_data.get("version") != "0.4.1":
             return "invalid", wheel_name
         source = _skill_source().resolve()
         if skill_root.resolve() != source and not _same_skill_tree(skill_root, source):

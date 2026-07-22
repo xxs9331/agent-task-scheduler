@@ -2,6 +2,18 @@
 
 This Skill is distributable instructions for an installed `agent-task-scheduler` CLI. It stores no task data and never edits JSON state directly.
 
+## Safe updater (0.4.1)
+
+`codex-team update-policy` reports the default `notify` policy. Set `auto` only
+after a deliberate one-time choice (`codex-team update-policy auto`); set `off`
+to skip discovery. Notify never mutates an installation. Auto validates a
+forward candidate's identity, hashes, wheel layout, and installer entrypoints,
+then transactionally updates the private launcher and only the current project
+in fresh subprocesses. A local-stage failure restores both local snapshots;
+success reports `project_updated=true` and requires a fresh Codex session before
+team startup. A 0.4.0 installation needs one manual 0.4.1 upgrade before it can
+use this updater.
+
 ## Initialize a managed project
 
 ```bash

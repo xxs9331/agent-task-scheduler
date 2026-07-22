@@ -32,7 +32,7 @@ def test_that_plugin_manifest_points_to_discoverable_skills() -> None:
     manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text())
 
     assert manifest["name"] == "global-scheduler"
-    assert manifest["version"] == "0.4.0"
+    assert manifest["version"] == "0.4.1"
     assert manifest["skills"] == "./skills/"
     assert (ROOT / manifest["skills"] / "codex-team" / "SKILL.md").is_file()
     assert manifest["interface"]["capabilities"] == ["Interactive", "Read", "Write"]
@@ -132,7 +132,7 @@ def test_that_skill_bundles_the_relative_user_command_installer() -> None:
     skill = ROOT / "skills" / "codex-team"
 
     assert (skill / "scripts" / "install_codex_team.py").is_file()
-    assert (skill / "assets" / "agent_task_scheduler-0.4.0-py3-none-any.whl").is_file()
+    assert (skill / "assets" / "agent_task_scheduler-0.4.1-py3-none-any.whl").is_file()
 
 
 def test_that_managed_skill_manifest_matches_current_files() -> None:
@@ -150,11 +150,11 @@ def test_that_launcher_wheel_contains_one_non_recursive_core_wheel() -> None:
         / "skills"
         / "codex-team"
         / "assets"
-        / "agent_task_scheduler-0.4.0-py3-none-any.whl"
+        / "agent_task_scheduler-0.4.1-py3-none-any.whl"
     )
     nested_path = (
         "agent_task_scheduler/codex_team/assets/codex-team/assets/"
-        "agent_task_scheduler-0.4.0-py3-none-any.whl"
+        "agent_task_scheduler-0.4.1-py3-none-any.whl"
     )
     with zipfile.ZipFile(launcher) as archive:
         nested_wheels = [name for name in archive.namelist() if name.endswith(".whl")]

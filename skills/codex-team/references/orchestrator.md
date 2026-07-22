@@ -1,5 +1,11 @@
 # Codex Team Orchestrator Contract
 
+## Update boundary
+
+If a preflight receipt says `restart_required=true`, do not native-spawn or
+continue a team in that process. Ask for a fresh Codex session so it loads the
+updated plugin and managed Skill.
+
 This is the complete root and product-manager contract. Read it fully before
 installation, bootstrap, team startup, native identity attestation, task
 publication or update, staff dispatch, batch continuity decisions, PM debugging

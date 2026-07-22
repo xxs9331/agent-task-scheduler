@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### 0.4.1
+
+- Added opt-in `codex-team update-policy {auto,notify,off}` preflight support.
+  The default `notify` policy never mutates a marketplace, plugin, launcher, or
+  project; `auto` is persisted only after an explicit choice and reports that a
+  fresh Codex session is required after a version-changing update.
+- Candidate discovery is bounded by JSON parsing, timeouts, strict forward
+  semantic versions, plugin identity, managed-skill integrity, and matching
+  wheel validation. Discovery and subprocess failures preserve the current
+  installation as warnings.
+- A 0.4.0 installation must be manually upgraded once: old code cannot update
+  itself before the 0.4.1 updater is installed.
+
 ### 0.4.0
 
 - Added read-only, fail-closed PM rescue candidates for repeated structured

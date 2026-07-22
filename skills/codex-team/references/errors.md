@@ -1,5 +1,17 @@
 # v1 Error Codes
 
+## Update warnings
+
+`UPDATE_CHECK_UNAVAILABLE` and `UPDATE_APPLY_UNAVAILABLE` are bounded warnings:
+the last validated local installation remains usable. Candidate identity, path,
+manifest, wheel, malformed JSON, same-version, and downgrade failures are never
+authorization to replace the local installation.
+
+`UPDATE_TRANSACTION_FAILED` is an `ok: false` receipt with a bounded `stage`
+(`launcher` or `project`), `rolled_back`, and `project_updated: false`. It
+means a validated forward candidate could not complete a local installation
+stage; normal startup stops rather than running with mixed bytes.
+
 | Code | Meaning | Write guarantee |
 |---|---|---|
 | `PROJECT_NOT_FOUND` | No explicit or discovered project config | No write |

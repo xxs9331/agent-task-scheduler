@@ -1,20 +1,20 @@
 {
-  "schema_version": 1,
-  "managed_skill": "codex-team",
-  "version": "0.4.0",
-  "integrity": "sha256-manifest",
   "files": {
-    "README.md": "d616cc2411e3a7d3884065fb95dfc182f2ea2966cd6ec38f1921db05442f0978",
-    "SKILL.md": "377f2f4983843eb9ac5fa5b48207f1db2d3ddb15a214ac3faf242f55e9f233ef",
+    "README.md": "11f7535ac80ccc513cfa4e921afb998eba08f5c6b46fb9e6b62708b79dbe1001",
+    "SKILL.md": "71cc1c35a93d165f0a054904e4ec680982851ba297b757325e4b4c55be9752b5",
     "assets/任务计划书模板.md": "2765f06faa68aba6a51b32217579e21d80d8a294cda068052f76230735ed6a1c",
-    "references/bootstrap.md": "859e5da4c5c77d578bf4016db27edb5d13937ca9049fafcd7f718cbf325ff004",
+    "references/bootstrap.md": "914b8a4d3f3f3c6a42fb69e3cff58120e014ce7abe431858f9fc99aad5b23f07",
     "references/contract.md": "24e74c9588e1aa18e09edc4201d6c3ce9f4fe91a644537795794ac7acf6133bf",
-    "references/errors.md": "f850a0d08bb424aed661bb8afd2f5ea667cbad6b2c586056fa3446c1a49f0aee",
+    "references/errors.md": "55e1b9c2dd0a4041eb8380b97f82aa6ab39c99120397b031a59bba8c0189d62e",
     "references/migration.md": "83e5faedc409bc95267ae9c2ce8fd918ebc893e357564618826cbc2e2a0a8a4b",
-    "references/orchestrator.md": "2ef8da2fcf8c582098df03dfd23568be8c38871a090c24d49897eb4096bed282",
+    "references/orchestrator.md": "b6f8b690954f6beda43acbbf95b9ff40f3431321d8e06320ea87447b95f0cd39",
     "references/platform.md": "264f2a83669310a451d401a4f8eda9f655691433ff9531d53f43846f31820758",
     "scripts/install.py": "4f8473e08553bf8a53d947c31c7e6f6cfffe792906ff4dd54ae5c6006b08ed8a",
     "scripts/install_codex_team.py": "e030f77f62c6383e47a52fc55386c34f97ba5488876d8ae88f1a4666ca97497b",
     "scripts/reconcile_handoff.py": "5122543717709d75f4f1450f9a11ccbe975adfe223df4443d9bf5131df4b112f"
-  }
+  },
+  "integrity": "sha256-manifest",
+  "managed_skill": "codex-team",
+  "schema_version": 1,
+  "version": "0.4.1"
 }

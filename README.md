@@ -16,6 +16,15 @@ Skill 和 Python CLI，并将每个项目的配置、状态、锁、发布历史
 
 ## 可移植 Codex Team
 
+### 0.4.1 安全更新
+
+`codex-team update-policy` 查看更新策略；默认 `notify` 只报告可用版本且不改动本机。
+用户显式执行 `codex-team update-policy auto` 后才允许自动更新；`off` 则完全跳过检查。
+自动更新先校验候选版本、身份、受管理哈希、wheel 布局和安装入口，再用新的子进程事务性
+更新私有 launcher 与当前项目；任一阶段失败会恢复两者的原始快照，且旧进程不得继续启动团队。
+成功回执含 `project_updated=true` 并要求新开 Codex 会话。0.4.0 需要先手动安装一次 0.4.1，
+之后才具备自动更新能力。
+
 跨电脑首次使用只需要安装本插件；插件本身没有也不声称存在 post-install hook。重启
 Codex 后，在任意项目中对它说“安装 codex-team 并初始化团队模式”。Skill 会从自己的
 相对 `scripts/install_codex_team.py` 运行内置安装器，无需 clone、复制文件或定位插件

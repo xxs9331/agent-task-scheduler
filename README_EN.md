@@ -16,6 +16,17 @@ history, and optional observation logs isolated inside each project.
 
 ## Portable Codex Team
 
+### Safe updates in 0.4.1
+
+`codex-team update-policy` reports the default `notify` policy without mutation.
+Only `codex-team update-policy auto` explicitly permits automatic updates; `off`
+skips discovery. Auto validates a forward candidate, then transactionally
+updates the managed private launcher and only the current project in fresh
+subprocesses. A local-stage failure restores both local snapshots; a version-
+changing success reports `project_updated: true` and requires a fresh Codex
+session before team startup. Install 0.4.1 manually once when upgrading from
+0.4.0.
+
 On a new computer, installing this plugin is all that is required. The plugin
 does not—and must not claim to—have a post-install hook. Restart Codex, then ask
 it in any project to “install codex-team and bootstrap team mode.” The Skill runs

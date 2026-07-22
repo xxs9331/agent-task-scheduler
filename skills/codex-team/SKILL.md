@@ -5,6 +5,20 @@ description: "Use for generic Codex Team startup, native role attestation, conti
 
 # Codex Team Skill
 
+## Managed updater
+
+`codex-team update-policy` inspects the policy; `codex-team update-policy auto`,
+`notify`, or `off` sets it. The default is `notify`. Only an explicit `auto`
+choice authorizes marketplace/plugin update writes. When an update changes the
+loaded version, the validated candidate transaction updates the managed private
+launcher and current project together; any local-stage failure restores both
+snapshots and stops startup. A successful version change reports
+`project_updated=true`; stop and begin a fresh Codex session before team startup.
+This updater is bundled in release 0.4.1.
+For first installation, run the bundled relative `scripts/install_codex_team.py`
+installer; it never edits a shell profile. Use `type -a codex-team` to diagnose
+an alias or shell-function shadowing the managed launcher.
+
 ## Load only the contract needed by the active role
 
 This file is the concise execution and safety contract shared by A/B/C/D/R.
