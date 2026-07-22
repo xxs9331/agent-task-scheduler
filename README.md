@@ -158,4 +158,18 @@ uv run --group test pytest -q
 uv run --with ruff ruff check src tests skills/codex-team/scripts
 ```
 
+严格离线隔离构建需要让在线预热和离线解析使用同一个索引身份与缓存目录。验证脚本会先
+在线构建一次以预热缓存，再立即使用相同的 `UV_DEFAULT_INDEX` 和 `UV_CACHE_DIR` 执行
+严格的 `uv build --offline`；它不会使用 `--no-build-isolation`：
+
+```bash
+UV_DEFAULT_INDEX=https://pypi.org/simple \
+OFFLINE_BUILD_RESET_CACHE=1 \
+scripts/verify_offline_build.sh
+```
+
+可通过 `OFFLINE_BUILD_VERIFY_ROOT` 选择独立验证目录；只有显式设置
+`OFFLINE_BUILD_RESET_CACHE=1` 时脚本才会清理该目录内自己的 uv 缓存。切换镜像时，
+在线和离线阶段必须保留相同的 `UV_DEFAULT_INDEX`，否则 uv 会按另一个注册表身份查询缓存。
+
 安全、隐私和版本记录见 `SECURITY.md`、`PRIVACY.md` 和 `CHANGELOG.md`。

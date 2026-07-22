@@ -151,6 +151,22 @@ uv run --group test pytest -q
 uv run --with ruff ruff check src tests skills/codex-team/scripts
 ```
 
+A strict isolated offline build must warm and resolve against the same index
+identity and cache directory. The verification helper performs one online build,
+then immediately runs strict `uv build --offline` with the same
+`UV_DEFAULT_INDEX` and `UV_CACHE_DIR`; it never uses `--no-build-isolation`:
+
+```bash
+UV_DEFAULT_INDEX=https://pypi.org/simple \
+OFFLINE_BUILD_RESET_CACHE=1 \
+scripts/verify_offline_build.sh
+```
+
+Set `OFFLINE_BUILD_VERIFY_ROOT` for an isolated verification directory. The
+helper removes its own uv cache only when `OFFLINE_BUILD_RESET_CACHE=1` is set.
+If a mirror is selected, keep the same `UV_DEFAULT_INDEX` for both phases so uv
+does not look in a different registry cache namespace.
+
 See `SECURITY.md`, `PRIVACY.md`, and `CHANGELOG.md` for operational boundaries
 and release history.
 

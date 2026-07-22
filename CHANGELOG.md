@@ -14,6 +14,9 @@
   installation as warnings.
 - A 0.4.0 installation must be manually upgraded once: old code cannot update
   itself before the 0.4.1 updater is installed.
+- Pinned the validated Hatchling build backend and added a strict isolated
+  offline-build verifier that preserves one explicit index identity and cache
+  directory across online cache warming and offline resolution.
 
 ### 0.4.0
 
